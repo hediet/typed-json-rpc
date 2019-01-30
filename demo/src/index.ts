@@ -1,7 +1,6 @@
-import { contract, types as t, requestContract, notificationContract, StreamBasedChannel, TypedChannel, StreamLogger, MessageStream } from "@hediet/typed-json-rpc";
+import { contract, types as t, requestContract, notificationContract, StreamBasedChannel, TypedChannel, StreamLogger, MessageStream, ConsoleRpcLogger } from "@hediet/typed-json-rpc";
 import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
 import { startServer } from "@hediet/typed-json-rpc-websocket-server";
-import { ConsoleRpcLogger } from "@hediet/typed-json-rpc/build/Logger";
 import * as winston from "winston";
 
 const logger2 = winston.createLogger({

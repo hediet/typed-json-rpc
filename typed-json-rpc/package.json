@@ -8,5 +8,9 @@
     "types": "./dist/index.d.ts",
     "dependencies": {
         "io-ts": "^1.7.0"
-    }
+    },
+	"publishConfig": {
+	    "access": "public",
+	    "registry": "https://registry.npmjs.org/"
+	}
 }

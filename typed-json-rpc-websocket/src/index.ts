@@ -1,6 +1,5 @@
-import { Message, BaseMessageStream, StreamBasedChannel, TypedChannel } from "@hediet/typed-json-rpc";
+import { Message, BaseMessageStream, StreamBasedChannel, TypedChannel, RpcLogger } from "@hediet/typed-json-rpc";
 import WebSocket = require("isomorphic-ws");
-import { RpcLogger } from "@hediet/typed-json-rpc/build/Logger";
 
 export type NormalizedWebSocketOptions = {
     address: string;
@@ -28,8 +27,8 @@ export class WebSocketStream extends BaseMessageStream {
         const normalizedOptions = normalizeWebSocketOptions(options);
         const ws = new WebSocket(normalizedOptions.address);
         return new Promise((res, rej) => {
-            ws.on("error", () => {
-                rej();
+            ws.on("error", (err) => {
+                rej(err);
             })
             ws.on("open", () => {
                 res(new WebSocketStream(ws));
