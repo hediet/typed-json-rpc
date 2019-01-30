@@ -1,0 +1,13 @@
+{
+    "extends": "../tsconfig.settings.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "composite": true,
+    },
+    "references": [
+        { "path": "../typed-json-rpc" },
+        { "path": "../typed-json-rpc-websocket" },
+        { "path": "../typed-json-rpc-websocket-server" }
+    ]
+}

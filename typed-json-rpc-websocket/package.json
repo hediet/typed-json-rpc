@@ -1,0 +1,15 @@
+{
+    "name": "@hediet/typed-json-rpc-websocket",
+    "version": "0.1.0",
+    "author": {"name": "Henning Dieterichs"},
+    "main": "./dist/index",
+    "types": "./dist/index.d.ts",
+    "dependencies": {
+      "@hediet/typed-json-rpc": "^0.1.0",
+      "isomorphic-ws": "^4.0.1"
+    },
+    "devDependencies": {
+      "@types/ws": "^6.0.1"
+    }
+  }
+  

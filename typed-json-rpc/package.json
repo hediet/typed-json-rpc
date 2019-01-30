@@ -1,0 +1,12 @@
+{
+    "name": "@hediet/typed-json-rpc",
+    "version": "0.1.0",
+    "author": {
+        "name": "Henning Dieterichs"
+    },
+    "main": "./dist/index",
+    "types": "./dist/index.d.ts",
+    "dependencies": {
+        "io-ts": "^1.7.0"
+    }
+}
