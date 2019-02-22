@@ -132,7 +132,7 @@ export type NotificationKeys<TRequestMap extends OneSideContract> = {
 
 export function contract<TContractObject extends ContractObject>(
     contractObj: TContractObject
-): Contract<string, TContractObject>;
+): Contract<never, TContractObject>;
 export function contract<
     TTags extends string,
     TContractObject extends ContractObject
@@ -141,9 +141,13 @@ export function contract<
     contractObj: TContractObject
 ): Contract<TTags, TContractObject>;
 export function contract<TContractObject extends ContractObject>(
-    contractObj: TContractObject
+    ...args: any[]
 ): Contract<string, TContractObject> {
-    return new (Contract as any)(contractObj);
+    if (args.length == 2) {
+        return new (Contract as any)(args[0], args[1]);
+    } else {
+        return new (Contract as any)([], args[0]);
+    }
 }
 
 export class Contract<
