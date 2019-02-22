@@ -1,4 +1,4 @@
-import { Message, BaseMessageStream, StreamBasedChannel, TypedChannel, RpcLogger } from "@hediet/typed-json-rpc";
+import { Message, BaseMessageStream } from "@hediet/typed-json-rpc";
 import WebSocket = require("isomorphic-ws");
 
 export type NormalizedWebSocketOptions = {
@@ -27,19 +27,20 @@ export class WebSocketStream extends BaseMessageStream {
         const normalizedOptions = normalizeWebSocketOptions(options);
         const ws = new WebSocket(normalizedOptions.address);
         return new Promise((res, rej) => {
-            ws.on("error", (err) => {
+            ws.onerror = (err) => {
                 rej(err);
-            })
-            ws.on("open", () => {
+            };
+            ws.onopen = () => {
                 res(new WebSocketStream(ws));
-            });
+            };
         });
     }
 
     constructor(private readonly ws: WebSocket) {
         super();
 
-        ws.on("message", (data) => {
+        ws.onmessage = msg => {
+            const data = msg.data;
             if (typeof data === "string") {
                 const json = JSON.parse(data);
                 // TODO check type of json
@@ -47,11 +48,11 @@ export class WebSocketStream extends BaseMessageStream {
             } else {
                 throw new Error("Not supported"); // TODO fix
             }
-        });
+        };
 
-        ws.on("close", _event => {
+        ws.onclose = _event => {
             this.onConnectionClosed();
-        });
+        };
     }
 
     public write(message: Message): Promise<void> {
@@ -61,14 +62,6 @@ export class WebSocketStream extends BaseMessageStream {
     }
 
     public toString(): string {
-        return "isomorphic-ws";
-    }
-}
-
-export namespace TypedWebSocketClientChannel {
-    export async function connectTo(options: WebSocketOptions, logger: RpcLogger|undefined): Promise<TypedChannel> {
-        const stream = await WebSocketStream.connectTo(options);
-        const channelFactory = StreamBasedChannel.getFactory(stream, logger);
-        return new TypedChannel(channelFactory, logger);
+        return "ws";
     }
 }

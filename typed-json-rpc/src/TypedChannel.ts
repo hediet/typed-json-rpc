@@ -1,7 +1,11 @@
 import * as t from "io-ts";
 import { Channel, ChannelFactory, RequestObject, ResponseObject } from "./Channel";
-import { RequestId, ErrorCode } from "./JsonRpcTypes";
+import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
+import { StreamBasedChannel, MessageStream } from ".";
+
+export type RuntimeJsonType<T> = t.Type<T, JSONValue, unknown>;
+export type RuntimeJsonTypeArrOrObj<T> = t.Type<T, JSONObject | JSONArray, unknown>;
 
 export type RequestHandlerFunc<TArg, TResult, TError> = (arg: TArg) => Promise<{ result: TResult } | { error: TError }>;
 export type NotificationHandlerFunc<TArg> = (arg: TArg) => void;
@@ -19,6 +23,11 @@ interface RegisteredNotificationHandler<TArg = any> {
 }
 
 export class TypedChannel {
+    public static fromStream(stream: MessageStream, logger: RpcLogger|undefined): TypedChannel {
+        const channelFactory = StreamBasedChannel.getFactory(stream, logger);
+        return new TypedChannel(channelFactory, logger);
+    }
+
     private channel: Channel|undefined = undefined;
     private handler = new Map<string, RegisteredRequestHandler | RegisteredNotificationHandler>();
 
@@ -57,13 +66,13 @@ export class TypedChannel {
                 })
             }
 
-            return Promise.resolve<ResponseObject>({
+            return {
                 error: {
                     code: ErrorCode.methodNotFound,
                     message: `No request handler for "${request.method}".`,
                     data: { method: request.method },
                 }
-            });
+            };
         }
 
         if (handler.kind != "request") {
@@ -74,13 +83,13 @@ export class TypedChannel {
                 })
             }
 
-            return Promise.resolve<ResponseObject>({
+            return {
                 error: {
                     code: ErrorCode.invalidRequest,
                     message: `"${request.method}" is registered as notification, but was sent as request.`,
                     data: { method: request.method },
                 }
-            }); 
+            }; 
         }
 
         const decodeResult = handler.requestType.paramType.decode(request.params);
@@ -92,13 +101,13 @@ export class TypedChannel {
                 })
             }
 
-            return Promise.resolve<ResponseObject>({
+            return {
                 error: {
                     code: ErrorCode.invalidParams,
                     message: decodeResult.value.map(e => e.message).join(", "),
-                    data: { errors: decodeResult.value },
+                    data: { errors: decodeResult.value.map(e => e.message || null) },
                 }
-            });
+            };
         } else if (decodeResult.isRight()) {
             const args = decodeResult.value;
             let response: ResponseObject;
@@ -129,16 +138,16 @@ export class TypedChannel {
                     }
                 };
             }
-            return Promise.resolve(response);
+            return response;
         } else {
             throw new Error("Impossible");
         }
     }
 
-	private handleNotification(request: RequestObject): Promise<void> {
+	private async handleNotification(request: RequestObject): Promise<void> {
         const handler = this.handler.get(request.method);
         if (!handler) {
-            return Promise.resolve();
+            return;
         }
 
         if (handler.kind != "notification") {
@@ -150,7 +159,7 @@ export class TypedChannel {
             }
 
             // dont send a response back as we are handling a notification.
-            return Promise.resolve();
+            return;
         }
 
         const decodeResult = handler.notificationType.paramType.decode(request.params);
@@ -163,7 +172,7 @@ export class TypedChannel {
             }
 
             // dont send a response back as we are handling a notification.
-            return Promise.resolve();
+            return;
         }
         const val = decodeResult.value;
 
@@ -181,7 +190,7 @@ export class TypedChannel {
             }
         }
 
-        return Promise.resolve();
+        return;
     }
 
     public registerRequestHandler<TArgs, TResponse, TError>(requestType: RequestType<TArgs, TResponse, TError>, handler: RequestHandlerFunc<TArgs, TResponse, TError>) {
@@ -210,6 +219,18 @@ export class TypedChannel {
         registeredHandler.handlers.push(handler);
     }
 
+    public getRegisteredTypes(): Array<RequestType | NotificationType> {
+        const result = [];
+        for (const h of this.handler.values()) {
+            if (h.kind === "notification") {
+                result.push(h.notificationType);
+            } else if (h.kind === "request") {
+                result.push(h.requestType);
+            }
+        }
+        return result;
+    }
+
     public async request<TParams, TResponse>(requestType: RequestType<TParams, TResponse, unknown>, args: TParams): Promise<TResponse> {
         if (!this.checkChannel(this.channel)) { throw ""; }
 
@@ -218,10 +239,11 @@ export class TypedChannel {
         const response = await this.channel.sendRequest({ method: requestType.method, params });
 
         if ("error" in response) {
-            // TODO custom error
-            const e = new Error(response.error.message);
-            (e as any).code = response.error.code;
-            (e as any).data = response.error.data;
+            const e = new RequestHandlingError(
+                response.error.message,
+                response.error.code,
+                response.error.data
+            );
             throw e;
         } else {
             const result = requestType.resultType.decode(response.result);
@@ -245,14 +267,21 @@ export class TypedChannel {
     }*/
 }
 
+export class RequestHandlingError extends Error {
+    constructor(message: string, public readonly code: ErrorCode, public readonly data: any) {
+        super(message);
+        Object.setPrototypeOf(this, RequestHandlingError.prototype);
+    }
+}
+
 export class RequestType<TArgs = unknown, TResponse = unknown, TError = unknown> {
     public readonly kind: "request" = "request";
 
     constructor(
         public readonly method: string,
-        public readonly paramType: t.Type<TArgs>,
-        public readonly resultType: t.Type<TResponse>,
-        public readonly errorType: t.Type<TError>,
+        public readonly paramType: RuntimeJsonTypeArrOrObj<TArgs>,
+        public readonly resultType: RuntimeJsonType<TResponse>,
+        public readonly errorType: RuntimeJsonType<TError>,
     ) {
     }
 }
@@ -262,17 +291,59 @@ export class NotificationType<TParams = unknown> {
     
     constructor(
         public readonly method: string,
-        public readonly paramType: t.Type<TParams>,
+        public readonly paramType: RuntimeJsonTypeArrOrObj<TParams>,
     ) {
     }
 }
 
-/*
-function request<TRequest extends t.Props, TResponse, TError>(name: string, request: TRequest, response: t.Type<TResponse>): RequestType<t.TypeC<TRequest>["_A"], TResponse, TError> {
-    return new RequestType<TRequest, TResponse, TError>(name, t.type<TRequest>(request), response, t.void);
+export interface Props {
+    [key: string]: RuntimeJsonType<any>;
 }
 
-function notification<TRequest extends t.Props, TError>(name: string, request: TRequest): NotificationType<t.TypeC<TRequest>["_A"]> {
-
+export interface CouldNotInfer {
+    __unsetMarker: "Unset-Marker";
 }
-*/
+
+export type CouldNotBeInferred<T, TTrue, TFalse> = CouldNotInfer extends T ? TTrue : TFalse;
+export type AsType<T, T2> = T extends T2 ? T : never;
+
+export const voidType = new t.Type<void, JSONValue, JSONValue>(
+    "void",
+    (u: unknown): u is void => u === undefined,
+    (i: unknown, context: t.Context) => {
+        if (i === null) { return t.success(undefined); }
+        return t.failure(i, context, "Given value is not 'null'.");
+    },
+    (_u: void) => null
+);
+
+
+export function request
+    <TRequest extends CouldNotInfer|Props, TResponse extends CouldNotInfer|RuntimeJsonType<any>, TError extends CouldNotInfer|RuntimeJsonType<any>>
+    (method: string, request: { params?: TRequest, result?: TResponse, error?: TError })
+    : RequestType<
+        CouldNotBeInferred<TRequest, {}, t.TypeC<AsType<TRequest, t.Props>>["_A"]>,
+        CouldNotBeInferred<TResponse, void, AsType<TResponse, RuntimeJsonType<any>>["_A"]>,
+        CouldNotBeInferred<TError, void, AsType<TError, RuntimeJsonType<any>>["_A"]>
+    > {
+        return {
+            kind: "request",
+            method: method,
+            paramType: (request.params ? t.type(request.params as t.Props) : t.type({})) as any,
+            errorType: (request.error ? request.error : voidType) as any,
+            resultType: (request.result ? request.result : voidType) as any,
+        }
+}
+
+export function notification
+    <TRequest extends CouldNotInfer|t.Props>
+    (method: string, notification: { method: string; params?: TRequest })
+    : NotificationType<
+        CouldNotBeInferred<TRequest, {}, t.TypeC<AsType<TRequest, t.Props>>["_A"]>
+    > {
+        return {
+            kind: "notification",
+            method: method,
+            paramType: (notification.params ? t.type(notification.params as t.Props) : t.type({})) as any
+        }
+}

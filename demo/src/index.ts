@@ -1,12 +1,25 @@
-import { contract, types as t, requestContract, notificationContract, StreamBasedChannel, TypedChannel, StreamLogger, MessageStream, ConsoleRpcLogger } from "@hediet/typed-json-rpc";
+import {
+    contract,
+    types as t,
+    requestContract,
+    notificationContract,
+    StreamBasedChannel,
+    TypedChannel,
+    StreamLogger,
+    MessageStream,
+    ConsoleRpcLogger,
+    OneSideContract,
+    RequestContract,
+    ContractObject,
+    Contract,
+    NotificationContract
+} from "@hediet/typed-json-rpc";
 import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
 import { startServer } from "@hediet/typed-json-rpc-websocket-server";
 import * as winston from "winston";
 
 const logger2 = winston.createLogger({
-    transports: [
-        new winston.transports.Console({ })
-    ],
+    transports: [new winston.transports.Console({})]
 });
 
 const c = contract({
@@ -18,7 +31,7 @@ const c = contract({
     }
 });
 
-const clients = new Set<typeof c._clientInterface>();
+const clients = new Set<typeof c.TClientInterface>();
 
 const logger = new ConsoleRpcLogger();
 
@@ -38,10 +51,12 @@ startServer({ port: 12345 }, logger, channel => {
 });
 
 async function foo() {
-    let stream: MessageStream = await WebSocketStream.connectTo({ address: "ws://localhost:12345" });
-    stream = new StreamLogger(stream);
-    const channelFactory = StreamBasedChannel.getFactory(stream, logger);
-    const channel = new TypedChannel(channelFactory, logger);
+    const channel = TypedChannel.fromStream(
+        new StreamLogger(
+            await WebSocketStream.connectTo({ address: "ws://localhost:12345" })
+        ),
+        logger
+    );
     const server = c.getServerInterface(channel, {
         onNewMessage: args => logger2.info("onNewMessage: ", args.msg)
     });

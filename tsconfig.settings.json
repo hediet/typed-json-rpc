@@ -7,6 +7,7 @@
         "composite": true,
         "sourceMap": true,
         "declarationMap": true,
+        "outDir": "./dist",
         //"baseUrl": ".",
         /*"paths": {
             "@hediet/typed-json-rpc": [ "./typed-json-rpc/src/index" ],
