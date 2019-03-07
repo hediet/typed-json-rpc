@@ -7,7 +7,7 @@ export const reflectContract = contract({
             method: "reflector/list-registered-request-and-notification-types",
             result: t.array(
                 t.type({
-                    method: t.string,
+                    method: t.string
                 })
             )
         })
@@ -15,13 +15,10 @@ export const reflectContract = contract({
     client: {}
 });
 
-
 export function registerReflector(channel: TypedChannel) {
-    reflectContract.getClientInterface(channel, {
-        list: async (args) => {
-            channel.getRegisteredTypes().map(t => {
-                
-            });
+    reflectContract.registerServerAndGetClient(channel, {
+        list: async args => {
+            channel.getRegisteredTypes().map(t => {});
             return [];
         }
     });

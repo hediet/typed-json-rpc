@@ -1,17 +1,21 @@
 {
-    "name": "@hediet/typed-json-rpc-websocket-server",
-    "version": "0.2.0",
-    "author": {
-        "name": "Henning Dieterichs"
-    },
-    "main": "./dist/index",
-    "types": "./dist/index.d.ts",
-    "dependencies": {
-        "@hediet/typed-json-rpc": "^0.2.0",
-        "ws": "^6.1.3"
-    },
-    "publishConfig": {
-        "access": "public",
-        "registry": "https://registry.npmjs.org/"
-    }
+	"name": "@hediet/typed-json-rpc-websocket-server",
+	"version": "0.3.0",
+	"author": {
+		"name": "Henning Dieterichs"
+	},
+	"main": "./dist/index",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"src"
+	],
+	"dependencies": {
+		"@hediet/typed-json-rpc": "^0.3.0",
+		"ws": "^6.1.3"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
 }

@@ -1,14 +1,17 @@
 {
-  "name": "demo",
-  "private": true,
-  "version": "0.1.0",
-  "author": {
-    "name": "Henning Dieterichs"
-  },
-  "dependencies": {
-    "@hediet/typed-json-rpc": "^0.1.0",
-    "@hediet/typed-json-rpc-websocket": "^0.1.0",
-    "@hediet/typed-json-rpc-websocket-server": "^0.1.0",
-    "winston": "^3.2.1"
-  }
+	"name": "demo",
+	"private": true,
+	"version": "0.3.0",
+	"author": {
+		"name": "Henning Dieterichs"
+	},
+	"scripts": {
+		"dev": "tsc --watch"
+	},
+	"dependencies": {
+		"@hediet/typed-json-rpc": "^0.1.0",
+		"@hediet/typed-json-rpc-websocket": "^0.1.0",
+		"@hediet/typed-json-rpc-websocket-server": "^0.1.0",
+		"winston": "^3.2.1"
+	}
 }
