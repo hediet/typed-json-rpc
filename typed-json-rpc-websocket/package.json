@@ -1,6 +1,6 @@
 {
 	"name": "@hediet/typed-json-rpc-websocket",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"author": {
 		"name": "Henning Dieterichs"
 	},
@@ -12,8 +12,8 @@
 	],
 	"dependencies": {
 		"@hediet/typed-json-rpc": "^0.3.0",
-		"isomorphic-ws": "^4.0.1",
-		"@types/ws": "^6.0.1"
+		"@types/ws": "^6.0.1",
+		"isomorphic-ws": "^4.0.1"
 	},
 	"publishConfig": {
 		"access": "public",
