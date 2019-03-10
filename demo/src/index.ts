@@ -8,12 +8,20 @@ import {
 	StreamLogger,
 	MessageStream,
 	ConsoleRpcLogger,
-	OneSideContract,
 	RequestContract,
 	ContractObject,
 	Contract,
 	NotificationContract,
 	ConsoleStreamLogger,
+	AnyRequestContract,
+	AsOneSideContract,
+	RuntimeJsonTypeArrOrObj,
+	RuntimeJsonType,
+	JSONValue,
+	AsRequestContract,
+	OneSideContract,
+	JSONArray,
+	JSONObject,
 } from "@hediet/typed-json-rpc";
 import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
 import { startWebSocketServer } from "@hediet/typed-json-rpc-websocket-server";
@@ -32,14 +40,16 @@ const c = contract({
 	},
 });
 
+//type MapRequest<TRequest extends >
+
 const clients = new Set<typeof c.TClientInterface>();
 
 const logger = new ConsoleRpcLogger();
 
 startWebSocketServer({ port: 12345 }, logger, channel => {
 	logger2.info("client");
-	const client = c.registerServerAndGetClient(channel, {
-		sendMessage: async args => {
+	const client = c.registerServer(channel, {
+		sendMessage: async (args, {}) => {
 			console.log(args.msg);
 			for (const c of clients) {
 				c.onNewMessage({ msg: args.msg });
@@ -58,8 +68,8 @@ async function foo() {
 		),
 		logger
 	);
-	const server = c.registerClientAndGetServer(channel, {
-		onNewMessage: args => logger2.info("onNewMessage: ", args.msg),
+	const server = c.getServer(channel, {
+		onNewMessage: (args, {}) => logger2.info("onNewMessage: ", args.msg),
 	});
 	channel.startListen();
 

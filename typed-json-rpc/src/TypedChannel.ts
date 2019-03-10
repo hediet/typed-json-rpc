@@ -28,15 +28,23 @@ export interface OkResult<TOk> {
 	ok: TOk;
 }
 
-export interface ErrorResult<TError> {
-	error: TError;
-	errorMessage?: string;
-	errorCode?: ErrorCode;
-}
+export type ErrorResult<TError> =
+	| {
+			error: TError;
+			errorMessage?: string;
+			errorCode?: ErrorCode;
+	  }
+	| {
+			error?: TError;
+			errorMessage: string;
+			errorCode?: ErrorCode;
+	  };
 
 export type RequestHandlerFunc<TArg, TResult, TError> = (
-	arg: TArg
+	arg: TArg,
+	requestId: RequestId
 ) => Promise<Result<TResult, TError>>;
+
 export type NotificationHandlerFunc<TArg> = (arg: TArg) => void;
 
 interface RegisteredRequestHandler<TArg = any, TResult = any, TError = any> {
@@ -123,7 +131,7 @@ export class TypedChannel {
 
 	private async handleRequest(
 		request: RequestObject,
-		_requestId: RequestId
+		requestId: RequestId
 	): Promise<ResponseObject> {
 		const handler = this.handler.get(request.method);
 		if (!handler) {
@@ -193,8 +201,8 @@ export class TypedChannel {
 			const args = decodeResult.value;
 			let response: ResponseObject;
 			try {
-				const result = await handler.handler(args);
-				if ("error" in result) {
+				const result = await handler.handler(args, requestId);
+				if ("error" in result || "errorMessage" in result) {
 					const errorData = handler.requestType.errorType.encode(
 						result.error
 					);
@@ -431,7 +439,7 @@ export class TypedChannel {
 export class RequestHandlingError<T = any> extends Error {
 	constructor(
 		message: string,
-		public readonly data: T,
+		public readonly data?: T,
 		public readonly code: ErrorCode = ErrorCode.genericApplicationError
 	) {
 		super(message);
