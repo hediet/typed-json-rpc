@@ -37,50 +37,34 @@ export interface HasMethod {
 }
 
 export function requestContract<
-	TParams extends CouldNotInfer | t.Props,
-	TResult extends CouldNotInfer | RuntimeJsonType<any>,
-	TError extends CouldNotInfer | RuntimeJsonType<any>
+	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
+	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
+	TError extends RuntimeJsonType<any> = RuntimeJsonType<undefined>
 >(request: {
 	method?: string;
 	params?: TParams;
 	result?: TResult;
 	error?: TError;
-}): RequestContract<
-	CouldNotBeInferred<TParams, {}, t.TypeC<AsType<TParams, t.Props>>["_A"]>,
-	CouldNotBeInferred<
-		TResult,
-		void,
-		AsType<TResult, RuntimeJsonType<any>>["_A"]
-	>,
-	CouldNotBeInferred<TError, void, AsType<TError, RuntimeJsonType<any>>["_A"]>
-> &
-	HasMethod {
+}): RequestContract<TParams["_A"], TResult["_A"], TError["_A"]> & HasMethod {
 	return {
 		kind: "request",
 		method: request.method,
-		params: (request.params
-			? t.type(request.params as t.Props)
-			: t.type({})) as any,
+		params: (request.params ? request.params : t.type({})) as any,
 		error: (request.error ? request.error : voidType) as any,
 		result: (request.result ? request.result : voidType) as any,
 	};
 }
 
 export function notificationContract<
-	TParams extends CouldNotInfer | t.Props
+	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>
 >(notification: {
 	method?: string;
 	params?: TParams;
-}): NotificationContract<
-	CouldNotBeInferred<TParams, {}, t.TypeC<AsType<TParams, t.Props>>["_A"]>
-> &
-	HasMethod {
+}): NotificationContract<TParams["_A"]> & HasMethod {
 	return {
 		kind: "notification",
 		method: notification.method,
-		params: (notification.params
-			? t.type(notification.params as t.Props)
-			: t.type({})) as any,
+		params: (notification.params ? notification.params : t.type({})) as any,
 	};
 }
 
@@ -301,6 +285,9 @@ export abstract class AbstractContract<
 		for (const [key, req] of Object.entries(myContract)) {
 			if (req.kind === "request") {
 				const method = myInterface[key];
+				if (!method) {
+					throw new Error(`No handler for "${key}" given!`);
+				}
 				typedChannel.registerRequestHandler(
 					req,
 					async (args, requestId) => {
@@ -336,9 +323,12 @@ export abstract class AbstractContract<
 				);
 			} else {
 				const method = myInterface[key];
-				typedChannel.registerNotificationHandler(req, args => {
-					method(args, notificationInfo);
-				});
+				if (method) {
+					typedChannel.registerNotificationHandler(req, args => {
+						// TODO maybe await and log errors?
+						method(args, notificationInfo);
+					});
+				}
 			}
 		}
 

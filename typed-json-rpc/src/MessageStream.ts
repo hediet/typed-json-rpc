@@ -1,4 +1,5 @@
 import { Message } from "./JsonRpcTypes";
+import { RpcLogger } from "./Logger";
 
 /**
  * No messages are lost when delaying reading with `read` or `setReadCallback`.
@@ -116,6 +117,22 @@ export class StreamLogger implements MessageStream {
 
 	public toString(): string {
 		return `StreamLogger/${this.baseStream.toString()}`;
+	}
+}
+
+export class RpcStreamLogger extends StreamLogger {
+	constructor(baseStream: MessageStream, rpcLogger: RpcLogger) {
+		super(baseStream, {
+			log: (stream, type, message) => {
+				const char = type === "incoming" ? "<-" : "->";
+				rpcLogger.trace({
+					text: `${char} [${stream.toString()}] ${JSON.stringify(
+						message
+					)}`,
+					message: message,
+				});
+			},
+		});
 	}
 }
 

@@ -33,10 +33,12 @@ const logger2 = winston.createLogger({
 
 const c = contract({
 	server: {
-		sendMessage: requestContract({ params: { msg: t.string } }),
+		sendMessage: requestContract({ params: t.type({ msg: t.string }) }),
 	},
 	client: {
-		onNewMessage: notificationContract({ params: { msg: t.string } }),
+		onNewMessage: notificationContract({
+			params: t.type({ msg: t.string }),
+		}),
 	},
 });
 
