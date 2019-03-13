@@ -1,6 +1,6 @@
 {
 	"name": "@hediet/typed-json-rpc-websocket-server",
-	"version": "0.3.11",
+	"version": "0.3.12",
 	"author": {
 		"name": "Henning Dieterichs"
 	},
