@@ -10,6 +10,9 @@
 		"dist",
 		"src"
 	],
+	"scripts": {
+		"dev": "tsc --watch"
+	},
 	"dependencies": {
 		"io-ts": "^1.7.0"
 	},
