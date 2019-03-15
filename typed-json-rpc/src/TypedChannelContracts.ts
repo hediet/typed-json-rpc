@@ -13,6 +13,8 @@ import {
 	ErrorResult,
 } from "./TypedChannel";
 import { ErrorCode, ErrorObject, RequestId, JSONValue } from "./JsonRpcTypes";
+import { MessageStream } from "./MessageStream";
+import { RpcLogger } from "./Logger";
 
 export type AnyRequestContract = RequestContract<any, any, any>;
 
@@ -354,6 +356,36 @@ export class Contract<
 		undefined
 	> {
 		throw this.onlyDesignTime();
+	}
+
+	public getServerFromStream(
+		stream: MessageStream,
+		logger: RpcLogger | undefined,
+		clientImplementation: this["TClientHandler"]
+	): {
+		server: ContractInterfaceOf<TContractObject["server"]>;
+		channel: TypedChannel;
+	} {
+		const channel = TypedChannel.fromStream(stream, logger);
+		const server = this.getServer(channel, clientImplementation);
+		channel.startListen();
+
+		return { channel, server };
+	}
+
+	public registerServerToStream(
+		stream: MessageStream,
+		logger: RpcLogger | undefined,
+		serverImplementation: this["TServerHandler"]
+	): {
+		client: ContractInterfaceOf<TContractObject["client"]>;
+		channel: TypedChannel;
+	} {
+		const channel = TypedChannel.fromStream(stream, logger);
+		const client = this.registerServer(channel, serverImplementation);
+		channel.startListen();
+
+		return { channel, client };
 	}
 
 	public getServer(

@@ -1,6 +1,6 @@
 {
 	"name": "@hediet/typed-json-rpc",
-	"version": "0.3.11",
+	"version": "0.3.13",
 	"author": {
 		"name": "Henning Dieterichs"
 	},
