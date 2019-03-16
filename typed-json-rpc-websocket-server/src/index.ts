@@ -1,17 +1,11 @@
 import WebSocket = require("ws");
-import {
-	TypedChannel,
-	StreamBasedChannel,
-	RpcLogger,
-} from "@hediet/typed-json-rpc";
 import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
 import { EventEmitter, EventSource } from "@hediet/std/events";
 import { Barrier } from "@hediet/std/synchronization";
 
 export function startWebSocketServer(
 	options: { port?: number },
-	logger: RpcLogger | undefined,
-	handleConnection: (channel: TypedChannel, stream: WebSocketStream) => void
+	handleConnection: (stream: WebSocketStream) => void
 ): WebSocketServer {
 	let opts: WebSocket.ServerOptions = {};
 	if (options.port) {
@@ -21,8 +15,7 @@ export function startWebSocketServer(
 	const wss = new WebSocket.Server(opts);
 	wss.on("connection", ws => {
 		const stream = new WebSocketStream(ws);
-		const channelFactory = StreamBasedChannel.getFactory(stream, logger);
-		handleConnection(new TypedChannel(channelFactory, logger), stream);
+		handleConnection(stream);
 	});
 
 	return new WebSocketServer(wss);
