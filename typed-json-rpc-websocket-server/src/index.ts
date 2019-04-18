@@ -8,7 +8,7 @@ export function startWebSocketServer(
 	handleConnection: (stream: WebSocketStream) => void
 ): WebSocketServer {
 	let opts: WebSocket.ServerOptions = {};
-	if (options.port) {
+	if (options.port !== undefined) {
 		opts.port = options.port;
 	}
 
