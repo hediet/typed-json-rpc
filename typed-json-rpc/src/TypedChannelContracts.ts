@@ -4,17 +4,15 @@ import {
 	NotificationType,
 	TypedChannel,
 	RuntimeJsonType,
-	CouldNotInfer,
-	CouldNotBeInferred,
-	AsType,
 	voidType,
 	RuntimeJsonTypeArrOrObj,
 	RequestHandlingError,
 	ErrorResult,
 } from "./TypedChannel";
-import { ErrorCode, ErrorObject, RequestId, JSONValue } from "./JsonRpcTypes";
+import { RequestId } from "./JsonRpcTypes";
 import { MessageStream } from "./MessageStream";
 import { RpcLogger } from "./Logger";
+import { Disposable, dispose } from "@hediet/std/disposable";
 
 export type AnyRequestContract = RequestContract<any, any, any>;
 
@@ -51,9 +49,9 @@ export function requestContract<
 	return {
 		kind: "request",
 		method: request.method,
-		params: (request.params ? request.params : t.type({})) as any,
-		error: (request.error ? request.error : voidType) as any,
-		result: (request.result ? request.result : voidType) as any,
+		params: request.params ? request.params : t.type({}),
+		error: request.error ? request.error : voidType,
+		result: request.result ? request.result : voidType,
 	};
 }
 
@@ -66,7 +64,7 @@ export function notificationContract<
 	return {
 		kind: "notification",
 		method: notification.method,
-		params: (notification.params ? notification.params : t.type({})) as any,
+		params: notification.params ? notification.params : t.type({}),
 	};
 }
 
@@ -206,12 +204,12 @@ export interface RequestHandlerInfo<TError, TCounterPart, TContext = never> {
 	newErr(error: ErrorResult<TError>): ErrorWrapper<TError>;
 	context: TContext;
 	requestId: RequestId;
-	counterPart: TCounterPart;
+	counterpart: TCounterPart;
 }
 
-export interface NotificationHandlerInfo<TCounterPart, TContext = never> {
+export interface NotificationHandlerInfo<TCounterpart, TContext = never> {
 	context: TContext;
-	counterPart: TCounterPart;
+	counterpart: TCounterpart;
 }
 
 export abstract class AbstractContract<
@@ -262,8 +260,10 @@ export abstract class AbstractContract<
 		>,
 		myInterface: Record<string, any>,
 		context: TContext
-	): Record<string, unknown> {
-		const counterPart: Record<string, unknown> = {};
+	): { counterpart: Record<string, unknown> } & Disposable {
+		const disposables = new Array<Disposable>();
+		const counterpart: Record<string, unknown> = {};
+		// send methods
 		for (const [key, req] of Object.entries(otherContract)) {
 			let method;
 			if (req.kind === "request") {
@@ -276,65 +276,70 @@ export abstract class AbstractContract<
 				};
 			}
 
-			counterPart[key] = method;
+			counterpart[key] = method;
 		}
 
 		const notificationInfo: NotificationHandlerInfo<any, TContext> = {
 			context,
-			counterPart,
+			counterpart,
 		};
 
+		// handlers
 		for (const [key, req] of Object.entries(myContract)) {
 			if (req.kind === "request") {
 				const method = myInterface[key];
 				if (!method) {
 					throw new Error(`No handler for "${key}" given!`);
 				}
-				typedChannel.registerRequestHandler(
-					req,
-					async (args, requestId) => {
-						try {
-							const requestInfo: RequestHandlerInfo<
-								any,
-								any,
-								TContext
-							> = {
-								context,
-								counterPart,
-								newErr: ErrorWrapper.factory,
-								requestId,
-							};
-							const result = await method(args, requestInfo);
-							if (result instanceof ErrorWrapper) {
-								return result.error;
-							}
-
-							return { ok: result };
-						} catch (e) {
-							if (e instanceof RequestHandlingError) {
-								return {
-									error: e.data,
-									errorCode: e.code,
-									errorMessage: e.message,
+				disposables.push(
+					typedChannel.registerRequestHandler(
+						req,
+						async (args, requestId) => {
+							try {
+								const requestInfo: RequestHandlerInfo<
+									any,
+									any,
+									TContext
+								> = {
+									context,
+									counterpart,
+									newErr: ErrorWrapper.factory,
+									requestId,
 								};
-							} else {
-								throw e;
+								const result = await method(args, requestInfo);
+								if (result instanceof ErrorWrapper) {
+									return result.error;
+								}
+
+								return { ok: result };
+							} catch (e) {
+								if (e instanceof RequestHandlingError) {
+									return {
+										error: e.data,
+										errorCode: e.code,
+										errorMessage: e.message,
+									};
+								} else {
+									throw e;
+								}
 							}
 						}
-					}
+					)
 				);
 			} else {
 				const method = myInterface[key];
 				if (method) {
-					typedChannel.registerNotificationHandler(req, args => {
-						// TODO maybe await and log errors?
-						method(args, notificationInfo);
-					});
+					disposables.push(
+						typedChannel.registerNotificationHandler(req, args => {
+							// TODO maybe await and log errors?
+							method(args, notificationInfo);
+						})
+					);
 				}
 			}
 		}
 
-		return counterPart;
+		return { counterpart, dispose: () => dispose(disposables) };
 	}
 }
 
@@ -367,7 +372,7 @@ export class Contract<
 		channel: TypedChannel;
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
-		const server = this.getServer(channel, clientImplementation);
+		const { server } = this.getServer(channel, clientImplementation);
 		channel.startListen();
 
 		return { channel, server };
@@ -382,7 +387,7 @@ export class Contract<
 		channel: TypedChannel;
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
-		const client = this.registerServer(channel, serverImplementation);
+		const { client } = this.registerServer(channel, serverImplementation);
 		channel.startListen();
 
 		return { channel, client };
@@ -391,27 +396,31 @@ export class Contract<
 	public getServer(
 		typedChannel: TypedChannel,
 		clientImplementation: this["TClientHandler"]
-	): ContractInterfaceOf<TContractObject["server"]> {
-		return this.getInterface(
+	): { server: ContractInterfaceOf<TContractObject["server"]> } & Disposable {
+		const { counterpart, dispose } = this.getInterface(
 			typedChannel,
 			this.client,
 			this.server,
 			clientImplementation,
 			undefined
-		) as any;
+		);
+
+		return { server: counterpart as any, dispose };
 	}
 
 	public registerServer(
 		typedChannel: TypedChannel,
 		serverImplementation: this["TServerHandler"]
-	): ContractInterfaceOf<TContractObject["client"]> {
-		return this.getInterface(
+	): { client: ContractInterfaceOf<TContractObject["client"]> } & Disposable {
+		const { counterpart, dispose } = this.getInterface(
 			typedChannel,
 			this.server,
 			this.client,
 			serverImplementation,
 			undefined
-		) as any;
+		);
+
+		return { client: counterpart as any, dispose };
 	}
 
 	public withContext<TContext>(): ContractWithContext<
@@ -448,27 +457,29 @@ export class ContractWithContext<
 		typedChannel: TypedChannel,
 		context: TContext,
 		clientImplementation: this["TClientHandler"]
-	): ContractInterfaceOf<TContractObject["server"]> {
-		return this.getInterface(
+	): { server: ContractInterfaceOf<TContractObject["server"]> } & Disposable {
+		const { counterpart, dispose } = this.getInterface(
 			typedChannel,
 			this.client,
 			this.server,
 			clientImplementation,
 			context
-		) as any;
+		);
+		return { server: counterpart as any, dispose };
 	}
 
 	public registerServer(
 		typedChannel: TypedChannel,
 		context: TContext,
 		serverImplementation: this["TServerHandler"]
-	): ContractInterfaceOf<TContractObject["client"]> {
-		return this.getInterface(
+	): { client: ContractInterfaceOf<TContractObject["client"]> } & Disposable {
+		const { counterpart, dispose } = this.getInterface(
 			typedChannel,
 			this.server,
 			this.client,
 			serverImplementation,
 			context
-		) as any;
+		);
+		return { client: counterpart as any, dispose };
 	}
 }

@@ -9,8 +9,8 @@
 		"dev": "tsc --watch"
 	},
 	"dependencies": {
-		"@hediet/typed-json-rpc": "^0.5.0",
-		"@hediet/typed-json-rpc-websocket": "^0.5.0",
-		"@hediet/typed-json-rpc-websocket-server": "^0.5.0"
+		"@hediet/typed-json-rpc": "^0.6.0",
+		"@hediet/typed-json-rpc-websocket": "^0.6.0",
+		"@hediet/typed-json-rpc-websocket-server": "^0.6.0"
 	}
 }

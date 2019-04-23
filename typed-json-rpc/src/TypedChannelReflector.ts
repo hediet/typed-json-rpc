@@ -1,4 +1,4 @@
-import { TypedChannel, request, contract, requestContract } from ".";
+import { TypedChannel, contract, requestContract } from ".";
 import * as t from "io-ts";
 
 export const reflectContract = contract({

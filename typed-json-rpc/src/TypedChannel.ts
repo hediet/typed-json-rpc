@@ -1,4 +1,5 @@
 import * as t from "io-ts";
+import { Disposable } from "@hediet/std/disposable";
 import {
 	Channel,
 	ChannelFactory,
@@ -56,7 +57,7 @@ interface RegisteredRequestHandler<TArg = any, TResult = any, TError = any> {
 interface RegisteredNotificationHandler<TArg = any> {
 	readonly kind: "notification";
 	readonly notificationType: NotificationType<TArg>;
-	readonly handlers: NotificationHandlerFunc<TArg>[];
+	readonly handlers: Set<NotificationHandlerFunc<TArg>>;
 }
 
 export class TypedChannel {
@@ -73,9 +74,9 @@ export class TypedChannel {
 		string,
 		RegisteredRequestHandler | RegisteredNotificationHandler
 	>();
-	private readonly unknownNotificationHandler: ((
-		notification: RequestObject
-	) => void)[] = [];
+	private readonly unknownNotificationHandler = new Set<
+		(notification: RequestObject) => void
+	>();
 	private timeoutHandle: any;
 
 	constructor(
@@ -251,7 +252,7 @@ export class TypedChannel {
 			for (const h of this.unknownNotificationHandler) {
 				h(request);
 			}
-			if (this.unknownNotificationHandler.length === 0) {
+			if (this.unknownNotificationHandler.size === 0) {
 				if (this.logger) {
 					this.logger.debug({
 						text: `Unhandled notification "${request.method}"`,
@@ -316,14 +317,14 @@ export class TypedChannel {
 
 	public registerUnknownNotificationHandler(
 		handler: (notification: RequestObject) => void
-	): void {
-		this.unknownNotificationHandler.push(handler);
+	): Disposable {
+		return setAndDeleteOnDispose(this.unknownNotificationHandler, handler);
 	}
 
 	public registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
 		handler: RequestHandlerFunc<TArgs, TResponse, TError>
-	) {
+	): Disposable {
 		const registeredHandler = this.handler.get(requestType.method);
 		if (registeredHandler) {
 			throw new Error(
@@ -333,7 +334,7 @@ export class TypedChannel {
 			);
 		}
 
-		this.handler.set(requestType.method, {
+		return setAndDeleteOnDispose(this.handler, requestType.method, {
 			kind: "request",
 			requestType,
 			handler,
@@ -343,13 +344,13 @@ export class TypedChannel {
 	public registerNotificationHandler<TArgs>(
 		type: NotificationType<TArgs>,
 		handler: NotificationHandlerFunc<TArgs>
-	): void {
+	): Disposable {
 		let registeredHandler = this.handler.get(type.method);
 		if (!registeredHandler) {
 			registeredHandler = {
 				kind: "notification",
 				notificationType: type,
-				handlers: [],
+				handlers: new Set(),
 			};
 			this.handler.set(type.method, registeredHandler);
 		} else {
@@ -369,7 +370,7 @@ export class TypedChannel {
 			}
 		}
 
-		registeredHandler.handlers.push(handler);
+		return setAndDeleteOnDispose(registeredHandler.handlers, handler);
 	}
 
 	public getRegisteredTypes(): Array<RequestType | NotificationType> {
@@ -471,20 +472,7 @@ export class NotificationType<TParams = unknown> {
 	) {}
 }
 
-export interface Props {
-	[key: string]: RuntimeJsonType<any>;
-}
-
-export interface CouldNotInfer {
-	__unsetMarker: "Unset-Marker";
-}
-
-export type CouldNotBeInferred<T, TTrue, TFalse> = CouldNotInfer extends T
-	? TTrue
-	: TFalse;
-export type AsType<T, T2> = T extends T2 ? T : never;
-
-export const voidType = new t.Type<void, JSONValue, JSONValue>(
+export const voidType = new t.Type<void, JSONValue, any>(
 	"void",
 	(u: unknown): u is void => u === undefined,
 	(i: unknown, context: t.Context) => {
@@ -497,29 +485,19 @@ export const voidType = new t.Type<void, JSONValue, JSONValue>(
 );
 
 export function request<
-	TRequest extends CouldNotInfer | Props,
-	TResponse extends CouldNotInfer | RuntimeJsonType<any>,
-	TError extends CouldNotInfer | RuntimeJsonType<any>
+	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
+	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
+	TError extends RuntimeJsonType<any> = RuntimeJsonType<undefined>
 >(
 	method: string,
-	request: { params?: TRequest; result?: TResponse; error?: TError }
-): RequestType<
-	CouldNotBeInferred<TRequest, {}, t.TypeC<AsType<TRequest, t.Props>>["_A"]>,
-	CouldNotBeInferred<
-		TResponse,
-		void,
-		AsType<TResponse, RuntimeJsonType<any>>["_A"]
-	>,
-	CouldNotBeInferred<TError, void, AsType<TError, RuntimeJsonType<any>>["_A"]>
-> {
+	request: { params?: TParams; result?: TResult; error?: TError }
+): RequestType<TParams["_A"], TResult["_A"], TError["_A"]> {
 	return {
 		kind: "request",
 		method: method,
-		paramType: (request.params
-			? t.type(request.params as t.Props)
-			: t.type({})) as any,
-		errorType: (request.error ? request.error : voidType) as any,
-		resultType: (request.result ? request.result : voidType) as any,
+		paramType: request.params ? request.params : t.type({}),
+		errorType: request.error ? request.error : voidType,
+		resultType: request.result ? request.result : voidType,
 	};
 }
 
@@ -529,17 +507,33 @@ export function rawNotification(
 	return new NotificationType(method, t.any);
 }
 
-export function notification<TRequest extends CouldNotInfer | t.Props>(
+export function notification<TParams extends RuntimeJsonTypeArrOrObj<{}>>(
 	method: string,
-	notification: { params?: TRequest }
-): NotificationType<
-	CouldNotBeInferred<TRequest, {}, t.TypeC<AsType<TRequest, t.Props>>["_A"]>
-> {
+	notification: { params?: TParams }
+): NotificationType<TParams["_A"]> {
 	return {
 		kind: "notification",
 		method: method,
-		paramType: (notification.params
-			? t.type(notification.params as t.Props)
-			: t.type({})) as any,
+		paramType: notification.params ? notification.params : t.type({}),
 	};
+}
+
+function setAndDeleteOnDispose<T>(set: Set<T>, item: T): Disposable;
+function setAndDeleteOnDispose<TKey, TValue>(
+	set: Map<TKey, TValue>,
+	key: TKey,
+	item: TValue
+): Disposable;
+function setAndDeleteOnDispose(
+	set: Set<any> | Map<any, any>,
+	keyOrItem: any,
+	item?: any
+): Disposable {
+	if (set instanceof Set) {
+		set.add(keyOrItem);
+		return Disposable.create(() => set.delete(keyOrItem));
+	} else {
+		set.set(keyOrItem, item);
+		return Disposable.create(() => set.delete(keyOrItem));
+	}
 }
