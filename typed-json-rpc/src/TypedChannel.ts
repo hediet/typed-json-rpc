@@ -15,6 +15,7 @@ import {
 } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
 import { StreamBasedChannel, MessageStream } from ".";
+import { Deferred } from "@hediet/std/synchronization";
 
 export type RuntimeJsonType<T> = t.Type<T, JSONValue, unknown>;
 export type RuntimeJsonTypeArrOrObj<T> = t.Type<
@@ -97,6 +98,9 @@ export class TypedChannel {
 		}
 	}
 
+	private listeningDeferred = new Deferred();
+	public onListening: Promise<void> = this.listeningDeferred.promise;
+
 	/**
 	 * This method must be called to forward messages from the stream to this channel.
 	 * This is not done automatically on construction so that this instance can be setup properly before handling messages.
@@ -117,6 +121,8 @@ export class TypedChannel {
 			handleRequest: (req, id) => this.handleRequest(req, id),
 			handleNotification: req => this.handleNotification(req),
 		});
+
+		this.listeningDeferred.resolve();
 	}
 
 	private checkChannel(channel: Channel | undefined): channel is Channel {
