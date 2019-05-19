@@ -90,16 +90,6 @@
     lodash "^4.17.11"
     to-fast-properties "^2.0.0"
 
-"@hediet/std@^0.2.0":
-  version "0.2.0"
-  resolved "https://registry.yarnpkg.com/@hediet/std/-/std-0.2.0.tgz#5c55d95a38f7924d07dd9600330263f4352e0615"
-  integrity sha512-DIbIDvI7g7a1e11Gs7HCAN0s8YvyKQ78ZSpdWr/LZDOz1FTXXgdxKTyQhYZy31F1oCXzVJwoUCNrxnrNLfsdZw==
-  dependencies:
-    "@types/chai" "^4.1.7"
-    "@types/sinon" "^7.0.10"
-    chai "^4.2.0"
-    sinon "^7.2.7"
-
 "@hediet/std@^0.4.0":
   version "0.4.0"
   resolved "https://registry.yarnpkg.com/@hediet/std/-/std-0.4.0.tgz#95dfd6e9d62f8bf9d91f3925d37b7b359b2af047"

@@ -90,7 +90,8 @@ export class TypedChannel {
 					console.warn(
 						`"${
 							this.startListen.name
-						}" has not been called within 1 second after construction of this channel. Did you forget to call it?`,
+						}" has not been called within 1 second after construction of this channel. ` +
+							`Did you forget to call it?`,
 						this
 					);
 				}
@@ -103,7 +104,8 @@ export class TypedChannel {
 
 	/**
 	 * This method must be called to forward messages from the stream to this channel.
-	 * This is not done automatically on construction so that this instance can be setup properly before handling messages.
+	 * This is not done automatically on construction so that this instance
+	 * can be setup properly before handling messages.
 	 */
 	public startListen(): void {
 		if (this.channel) {
@@ -443,6 +445,9 @@ export class TypedChannel {
     }*/
 }
 
+/**
+ * Is thrown when handling the request raised an error.
+ */
 export class RequestHandlingError<T = any> extends Error {
 	constructor(
 		message: string,
@@ -454,28 +459,50 @@ export class RequestHandlingError<T = any> extends Error {
 	}
 }
 
+/**
+ * Describes a request type.
+ */
 export class RequestType<
-	TArgs = unknown,
+	TParams = unknown,
 	TResponse = unknown,
-	TError = unknown
+	TError = unknown,
+	TMethod = string
 > {
 	public readonly kind: "request" = "request";
 
 	constructor(
-		public readonly method: string,
-		public readonly paramType: RuntimeJsonTypeArrOrObj<TArgs>,
+		public readonly method: TMethod,
+		public readonly paramType: RuntimeJsonTypeArrOrObj<TParams>,
 		public readonly resultType: RuntimeJsonType<TResponse>,
 		public readonly errorType: RuntimeJsonType<TError>
 	) {}
+
+	public withMethod(
+		method: string
+	): RequestType<TParams, TResponse, TError, string> {
+		return new RequestType(
+			method,
+			this.paramType,
+			this.resultType,
+			this.errorType
+		);
+	}
 }
 
-export class NotificationType<TParams = unknown> {
+/**
+ * Describes a notification type.
+ */
+export class NotificationType<TParams = unknown, TMethod = string> {
 	public readonly kind: "notification" = "notification";
 
 	constructor(
-		public readonly method: string,
+		public readonly method: TMethod,
 		public readonly paramType: RuntimeJsonTypeArrOrObj<TParams>
 	) {}
+
+	public withMethod(method: string): NotificationType<TParams, string> {
+		return new NotificationType(method, this.paramType);
+	}
 }
 
 export const voidType = new t.Type<void, JSONValue, any>(
@@ -490,6 +517,9 @@ export const voidType = new t.Type<void, JSONValue, any>(
 	(_u: void) => null
 );
 
+/**
+ * Describes a request type.
+ */
 export function request<
 	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
 	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
@@ -498,30 +528,34 @@ export function request<
 	method: string,
 	request: { params?: TParams; result?: TResult; error?: TError }
 ): RequestType<TParams["_A"], TResult["_A"], TError["_A"]> {
-	return {
-		kind: "request",
-		method: method,
-		paramType: request.params ? request.params : t.type({}),
-		errorType: request.error ? request.error : voidType,
-		resultType: request.result ? request.result : voidType,
-	};
+	return new RequestType(
+		method,
+		request.params ? request.params : t.type({}),
+		request.error ? request.error : voidType,
+		request.result ? request.result : voidType
+	);
 }
 
+/**
+ * Describes a notification type without static type validation.
+ */
 export function rawNotification(
 	method: string
 ): NotificationType<JSONObject | JSONArray | undefined> {
 	return new NotificationType(method, t.any);
 }
 
+/**
+ * Describes a notification type.
+ */
 export function notification<TParams extends RuntimeJsonTypeArrOrObj<{}>>(
 	method: string,
 	notification: { params?: TParams }
 ): NotificationType<TParams["_A"]> {
-	return {
-		kind: "notification",
-		method: method,
-		paramType: notification.params ? notification.params : t.type({}),
-	};
+	return new NotificationType(
+		method,
+		notification.params ? notification.params : t.type({})
+	);
 }
 
 function setAndDeleteOnDispose<T>(set: Set<T>, item: T): Disposable;

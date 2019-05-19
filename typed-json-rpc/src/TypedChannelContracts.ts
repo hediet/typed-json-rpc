@@ -14,28 +14,33 @@ import { MessageStream } from "./MessageStream";
 import { RpcLogger } from "./Logger";
 import { Disposable, dispose } from "@hediet/std/disposable";
 
-export type AnyRequestContract = RequestContract<any, any, any>;
-
-export interface RequestContract<
+/**
+ * Describes a request type as part of a `Contract`.
+ * The method is inferred from its position in the contract if not provided.
+ */
+export type ContractRequestType<
 	TParams = unknown,
 	TResult = unknown,
 	TError = unknown
-> {
-	kind: "request";
-	params: RuntimeJsonTypeArrOrObj<TParams>;
-	result: RuntimeJsonType<TResult>;
-	error: RuntimeJsonType<TError>;
-}
+> = RequestType<TParams, TResult, TError, string | undefined>;
 
-export interface NotificationContract<TArgs = unknown> {
-	kind: "notification";
-	params: RuntimeJsonTypeArrOrObj<TArgs>;
-}
+export type AnyRequestContract = ContractRequestType<any, any, any>;
+export type AsRequestContract<T extends AnyRequestContract> = T;
 
-export interface HasMethod {
-	method: string | undefined;
-}
+/**
+ * Describes a notification type as part of a `Contract`.
+ * The method is inferred from its position in the contract if not provided.
+ */
+export type ContractNotificationType<TArgs = unknown> = NotificationType<
+	TArgs,
+	string | undefined
+>;
 
+export type AsNotificationContract<T extends ContractNotificationType> = T;
+
+/**
+ * Describes a request type as part of a `Contract`.
+ */
 export function requestContract<
 	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
 	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
@@ -45,65 +50,63 @@ export function requestContract<
 	params?: TParams;
 	result?: TResult;
 	error?: TError;
-}): RequestContract<TParams["_A"], TResult["_A"], TError["_A"]> & HasMethod {
-	return {
-		kind: "request",
-		method: request.method,
-		params: request.params ? request.params : t.type({}),
-		error: request.error ? request.error : voidType,
-		result: request.result ? request.result : voidType,
-	};
+}): ContractRequestType<TParams["_A"], TResult["_A"], TError["_A"]> {
+	return new RequestType(
+		request.method,
+		request.params ? request.params : t.type({}),
+		request.result ? request.result : voidType,
+		request.error ? request.error : voidType
+	);
 }
 
+/**
+ * Describes a notification type as part of a `Contract`.
+ */
 export function notificationContract<
 	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>
 >(notification: {
 	method?: string;
 	params?: TParams;
-}): NotificationContract<TParams["_A"]> & HasMethod {
-	return {
-		kind: "notification",
-		method: notification.method,
-		params: notification.params ? notification.params : t.type({}),
-	};
+}): ContractNotificationType<TParams["_A"]> {
+	return new NotificationType(
+		notification.method,
+		notification.params ? notification.params : t.type({})
+	);
 }
 
-export type AsOneSideContract<T extends OneSideContract> = T;
-
-export type AsRequestContract<T extends AnyRequestContract> = T;
-
-export type AsNotificationContract<T extends NotificationContract> = T;
-
-export type OneSideContract<TExtra = object> = Record<
+/**
+ * Describes one side of a contract.
+ */
+export type OneSideContract = Record<
 	string,
-	(AnyRequestContract | NotificationContract<any>) & TExtra
+	AnyRequestContract | ContractNotificationType<any>
 >;
-
-export interface ContractObject<TExtra = {}> {
-	server: OneSideContract<TExtra>;
-	client: OneSideContract<TExtra>;
-}
+export type AsOneSideContract<T extends OneSideContract> = T;
 
 export type ContractToRequest<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? RequestType<
-				TRequestMap[TRequest]["params"]["_A"],
-				TRequestMap[TRequest]["result"]["_A"],
-				TRequestMap[TRequest]["error"]["_A"]
+				TRequestMap[TRequest]["paramType"]["_A"],
+				TRequestMap[TRequest]["resultType"]["_A"],
+				TRequestMap[TRequest]["errorType"]["_A"]
 		  >
-		: NotificationType<TRequestMap[TRequest]["params"]["_A"]>
+		: NotificationType<TRequestMap[TRequest]["paramType"]["_A"]>
 };
 
 export type ContractInterfaceOf<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? (
-				arg: TRequestMap[TRequest]["params"]["_A"]
-		  ) => Promise<TRequestMap[TRequest]["result"]["_A"]>
-		: (arg: TRequestMap[TRequest]["params"]["_A"]) => void
+				arg: TRequestMap[TRequest]["paramType"]["_A"]
+		  ) => Promise<TRequestMap[TRequest]["resultType"]["_A"]>
+		: (arg: TRequestMap[TRequest]["paramType"]["_A"]) => void
 };
 
+/** Marks a type as error wrapper. */
 export const IsErrorWrapper = Symbol();
 
+/**
+ * Wraps an error so that it can be distinguished from a successfully returned result.
+ */
 export class ErrorWrapper<TError> {
 	public static factory = (error: ErrorResult<unknown>) => {
 		return new ErrorWrapper<unknown>(error);
@@ -122,22 +125,22 @@ export type ContractHandlerOf<
 		TRequestMap
 	>]: TRequestMap[TKey] extends AnyRequestContract
 		? (
-				arg: TRequestMap[TKey]["params"]["_A"],
+				arg: TRequestMap[TKey]["paramType"]["_A"],
 				info: RequestHandlerInfo<
-					TRequestMap[TKey]["error"]["_A"],
+					TRequestMap[TKey]["errorType"]["_A"],
 					ContractInterfaceOf<TCounterPartRequestMap>,
 					TContext
 				>
 		  ) => Promise<
-				| TRequestMap[TKey]["result"]["_A"]
-				| ErrorWrapper<TRequestMap[TKey]["error"]["_A"]>
+				| TRequestMap[TKey]["resultType"]["_A"]
+				| ErrorWrapper<TRequestMap[TKey]["errorType"]["_A"]>
 		  >
 		: never // cannot happen
 } &
 	{
 		[TKey in NotificationKeys<TRequestMap>]?: (
-			arg: TRequestMap[TKey]["params"]["_A"],
-			info: NotificationHandlerInfo<
+			arg: TRequestMap[TKey]["paramType"]["_A"],
+			info: HandlerInfo<
 				ContractInterfaceOf<TCounterPartRequestMap>,
 				TContext
 			>
@@ -156,17 +159,28 @@ export type NotificationKeys<TRequestMap extends OneSideContract> = {
 		: TRequest
 }[keyof TRequestMap];
 
-export function contract<TContractObject extends ContractObject<HasMethod>>(
+/**
+ * Describes a contract.
+ */
+export interface ContractObject {
+	server: OneSideContract;
+	client: OneSideContract;
+}
+
+/**
+ * Describes a new contract.
+ */
+export function contract<TContractObject extends ContractObject>(
 	contractObj: TContractObject
 ): Contract<never, TContractObject>;
 export function contract<
 	TTags extends string,
-	TContractObject extends ContractObject<HasMethod>
+	TContractObject extends ContractObject
 >(
 	tags: TTags[],
 	contractObj: TContractObject
 ): Contract<TTags, TContractObject>;
-export function contract<TContractObject extends ContractObject<HasMethod>>(
+export function contract<TContractObject extends ContractObject>(
 	...args: any[]
 ): Contract<string, TContractObject> {
 	let tags = [];
@@ -184,32 +198,40 @@ export function contract<TContractObject extends ContractObject<HasMethod>>(
 }
 
 function transform(
-	requestMap: OneSideContract<HasMethod>
+	requestMap: OneSideContract
 ): Record<string, NotificationType | RequestType> {
 	const result: Record<string, NotificationType | RequestType> = {};
 	for (const [key, req] of Object.entries(requestMap)) {
 		const method = req.method ? req.method : key;
-		let type;
-		if (req.kind === "notification") {
-			type = new NotificationType(method, req.params);
-		} else {
-			type = new RequestType(method, req.params, req.result, req.error);
-		}
-		result[key] = type;
+		result[key] = req.withMethod(method);
 	}
 	return result;
 }
 
-export interface RequestHandlerInfo<TError, TCounterPart, TContext = never> {
-	newErr(error: ErrorResult<TError>): ErrorWrapper<TError>;
+/**
+ * Provides additional information when handling a request or a notification.
+ */
+export interface HandlerInfo<TCounterPart, TContext = never> {
 	context: TContext;
-	requestId: RequestId;
+	/**
+	 * The implementation of the other contract.
+	 */
 	counterpart: TCounterPart;
 }
 
-export interface NotificationHandlerInfo<TCounterpart, TContext = never> {
-	context: TContext;
-	counterpart: TCounterpart;
+/**
+ * Provides additional information when handling a request.
+ */
+export interface RequestHandlerInfo<TError, TCounterPart, TContext = never>
+	extends HandlerInfo<TCounterPart, TContext> {
+	/**
+	 * Creates a new error object that can be returned in request handlers.
+	 */
+	newErr(error: ErrorResult<TError>): ErrorWrapper<TError>;
+	/**
+	 * The id of the current request.
+	 */
+	requestId: RequestId;
 }
 
 export abstract class AbstractContract<
@@ -218,7 +240,7 @@ export abstract class AbstractContract<
 > {
 	protected onlyDesignTime() {
 		return new Error(
-			"This property is not allowed to be accessed at runtime"
+			"This property is not meant to be accessed at runtime"
 		);
 	}
 
@@ -279,7 +301,7 @@ export abstract class AbstractContract<
 			counterpart[key] = method;
 		}
 
-		const notificationInfo: NotificationHandlerInfo<any, TContext> = {
+		const notificationInfo: HandlerInfo<any, TContext> = {
 			context,
 			counterpart,
 		};
@@ -363,6 +385,11 @@ export class Contract<
 		throw this.onlyDesignTime();
 	}
 
+	/**
+	 * Gets a server object directly from a stream by constructing a new `TypedChannel`.
+	 * It also registers the client implementation to the stream.
+	 * The channel starts listening with the next event loop.
+	 */
 	public getServerFromStream(
 		stream: MessageStream,
 		logger: RpcLogger | undefined,
@@ -373,11 +400,18 @@ export class Contract<
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
 		const { server } = this.getServer(channel, clientImplementation);
-		channel.startListen();
+		setTimeout(() => {
+			channel.startListen();
+		}, 0);
 
 		return { channel, server };
 	}
 
+	/**
+	 * Gets a client object directly from a stream by constructing a new `TypedChannel`.
+	 * It also registers the server implementation to the stream.
+	 * The channel starts listening with the next event loop.
+	 */
 	public registerServerToStream(
 		stream: MessageStream,
 		logger: RpcLogger | undefined,
@@ -388,7 +422,9 @@ export class Contract<
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
 		const { client } = this.registerServer(channel, serverImplementation);
-		channel.startListen();
+		setTimeout(() => {
+			channel.startListen();
+		}, 0);
 
 		return { channel, client };
 	}

@@ -1,0 +1,27 @@
+{
+	"name": "@hediet/typed-json-rpc-browser",
+	"description": "Provides JSON RPC through window.postMessage.",
+	"version": "0.6.0",
+	"author": {
+		"name": "Henning Dieterichs",
+		"email": "henning.dieterichs@live.de"
+	},
+	"license": "MIT",
+	"main": "./dist/index",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"dev": "tsc --watch"
+	},
+	"dependencies": {
+		"@hediet/std": "^0.4.0",
+		"@hediet/typed-json-rpc": "^0.6.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
+}

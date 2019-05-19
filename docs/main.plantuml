@@ -1,0 +1,62 @@
+@startuml Main
+
+interface Channel {
+    sendRequest(RequestObject): ResponseObject
+    sendNotification(RequestObject): void
+}
+Channel ..> RequestObject
+Channel ..> ResponseObject
+class RequestObject
+class ResponseObject
+
+interface RequestHandler {
+    handleRequest(RequestObject): ResponseObject
+	handleNotification(RequestObject): void
+}
+
+interface ChannelFactory {
+    createChannel(RequestHandler): Channel
+}
+ChannelFactory ..> RequestHandler
+ChannelFactory ..> Channel
+
+interface MessageStream {
+    write(Message): void;
+	setReadCallback(Message => void): void;
+}
+
+MessageStream ..> Message
+
+class BaseMessageStream << abstract >> {
+    #onMessage()
+}
+BaseMessageStream ..|> MessageStream
+
+
+
+class StreamBasedChannelStatic as "StreamBasedChannel::Static"
+StreamBasedChannelStatic ..|> ChannelFactory
+StreamBasedChannelStatic ..> StreamBasedChannel
+
+class StreamBasedChannel
+StreamBasedChannel ..|> Channel
+StreamBasedChannel ..> MessageStream
+
+class TypedChannel {
+    request(RequestType, args)
+    notify(NotificationType, args)
+    registerRequestHandler(RequestType, handler)
+    registerNotificationHandler(NotificationType, args)
+}
+TypedChannel ..|> RequestHandler
+TypedChannel ..> RequestType
+TypedChannel ..> NotificationType
+TypedChannel ..> ChannelFactory
+
+class Contract<TServer, TClient> {
+    registerServer(TypedChannel, TServer): TClient
+    getServer(TypedChannel, TClient): TServer
+}
+Contract ..> TypedChannel
+
+@enduml

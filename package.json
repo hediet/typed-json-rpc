@@ -5,6 +5,7 @@
 		"typed-json-rpc-websocket",
 		"typed-json-rpc-websocket-server",
 		"typed-json-rpc-streams",
+		"typed-json-rpc-browser",
 		"demo"
 	]
 }

@@ -50,8 +50,14 @@ export abstract class BaseMessageStream implements MessageStream {
 		else this.unreadMessages.push(message);
 	}
 
+	/**
+	 * Writes a message to the stream.
+	 */
 	public abstract write(message: Message): Promise<void>;
 
+	/**
+	 * Returns human readable information of this message stream.
+	 */
 	public abstract toString(): string;
 
 	constructor() {
@@ -62,8 +68,14 @@ export abstract class BaseMessageStream implements MessageStream {
 		this.onConnectionClosed = onConnectionClosed!;
 	}
 
+	/**
+	 * Is resolved when the stream closed.
+	 */
 	public readonly onClosed: Promise<void>;
 
+	/**
+	 * Sets a callback for incoming messages.
+	 */
 	public setReadCallback(
 		callback: ((readMessage: Message) => void) | undefined
 	) {
