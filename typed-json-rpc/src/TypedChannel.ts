@@ -61,6 +61,12 @@ interface RegisteredNotificationHandler<TArg = any> {
 	readonly handlers: Set<NotificationHandlerFunc<TArg>>;
 }
 
+/**
+ * Represents a typed channel.
+ * Call `startListen` to create the underlying channel
+ * and to start processing all incoming messages.
+ * At this point, all request and notification handlers should be registered.
+ */
 export class TypedChannel {
 	public static fromStream(
 		stream: MessageStream,

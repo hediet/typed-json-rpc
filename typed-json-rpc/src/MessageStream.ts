@@ -90,6 +90,9 @@ export abstract class BaseMessageStream implements MessageStream {
 	}
 }
 
+/**
+ * Used by `StreamLogger` to log messages.
+ */
 export interface MessageLogger {
 	log(
 		stream: MessageStream,
@@ -98,6 +101,9 @@ export interface MessageLogger {
 	): void;
 }
 
+/**
+ * Intercepts a stream for logging.
+ */
 export class StreamLogger implements MessageStream {
 	constructor(
 		private readonly baseStream: MessageStream,
@@ -132,6 +138,9 @@ export class StreamLogger implements MessageStream {
 	}
 }
 
+/**
+ * Logs messages to a `RpcLogger`.
+ */
 export class RpcStreamLogger extends StreamLogger {
 	constructor(baseStream: MessageStream, rpcLogger: RpcLogger) {
 		super(baseStream, {
@@ -148,6 +157,9 @@ export class RpcStreamLogger extends StreamLogger {
 	}
 }
 
+/**
+ * Logs messages to `console`.
+ */
 export class ConsoleStreamLogger extends StreamLogger {
 	constructor(baseStream: MessageStream) {
 		super(baseStream, {

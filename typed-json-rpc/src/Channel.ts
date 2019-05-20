@@ -43,20 +43,6 @@ export interface Channel {
 	toString(): string;
 }
 
-/*
-export function sendRequestWithDisposer(channel: Channel, request: RequestObject, messageIdCallback: (requestId: RequestId) => DisposableLike) {
-	let disposables: DisposableLike = undefined;
-	return channel.sendRequest(request, (requestId) => {
-	    disposables = messageIdCallback(requestId);
-    }).then((result) => {
-        dispose(disposables);
-        return Promise.resolve(result);
-    }, (reason) => {
-        dispose(disposables);
-        return Promise.reject(reason);
-    });
-}*/
-
 /**
  * A request handler is an object that can handle requests and notifications.
  * Implementations must respond to all requests.
@@ -72,6 +58,11 @@ export interface RequestHandler {
 	handleNotification(request: RequestObject): Promise<void>;
 }
 
+/**
+ * A factory for `Channel`s.
+ * Is used to delay setting a `RequestHandler`.
+ * Once a channel is constructed, it processes all incoming messages.
+ */
 export interface ChannelFactory {
 	createChannel(listener: RequestHandler | undefined): Channel;
 }

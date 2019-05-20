@@ -13,6 +13,10 @@ export type WebSocketOptions =
 			forceTls?: boolean;
 	  };
 
+/**
+ * Normalizes the given options to `NormalizedWebSocketOptions`.
+ * It builds the address from a given host and port.
+ */
 export function normalizeWebSocketOptions(
 	options: WebSocketOptions
 ): NormalizedWebSocketOptions {
@@ -28,6 +32,10 @@ export function normalizeWebSocketOptions(
 	}
 }
 
+/**
+ * Represents a stream through a web socket.
+ * Use the static `connectTo` method to get a stream to a web socket server.
+ */
 export class WebSocketStream extends BaseMessageStream {
 	public static connectTo(
 		options: WebSocketOptions
@@ -64,10 +72,16 @@ export class WebSocketStream extends BaseMessageStream {
 		};
 	}
 
+	/**
+	 * Closes the underlying socket.
+	 */
 	public close(): void {
 		this.socket.close();
 	}
 
+	/**
+	 * Same as `close`.
+	 */
 	public dispose(): void {
 		this.close();
 	}

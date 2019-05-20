@@ -20,6 +20,11 @@ import { RpcLogger } from "./Logger";
  * Implements a channel through a stream and an optional request handler to handle incoming requests.
  */
 export class StreamBasedChannel implements Channel {
+	/**
+	 * Creates a channel factory from a given stream and logger.
+	 * This allows to delay specifying a `RequestHandler`.
+	 * Once the channel is created, it processes incoming messages.
+	 */
 	public static getFactory(
 		stream: MessageStream,
 		logger: RpcLogger | undefined
@@ -135,7 +140,8 @@ export class StreamBasedChannel implements Channel {
 	}
 
 	private processResponse(message: ResponseMessage) {
-		const callback = this.unprocessedResponses.get("" + message.id);
+		const strId = "" + message.id;
+		const callback = this.unprocessedResponses.get(strId);
 		if (!callback) {
 			if (this.logger) {
 				this.logger.debug({
@@ -145,7 +151,7 @@ export class StreamBasedChannel implements Channel {
 			}
 			return;
 		}
-		this.unprocessedResponses.delete("" + message.id);
+		this.unprocessedResponses.delete(strId);
 		callback(message);
 	}
 
@@ -157,29 +163,23 @@ export class StreamBasedChannel implements Channel {
 		request: RequestObject,
 		messageIdCallback?: (requestId: RequestId) => void
 	): Promise<ResponseObject> {
-		const msg = {
+		const message = {
 			id: this.newRequestId(),
 			method: request.method,
 			params: request.params,
 		};
 
 		if (messageIdCallback) {
-			messageIdCallback(msg.id!);
+			messageIdCallback(message.id!);
 		}
 
 		return new Promise<ResponseObject>((resolve, reject) => {
-			this.unprocessedResponses.set("" + msg.id, response => {
+			const strId = "" + message.id;
+			this.unprocessedResponses.set(strId, response => {
 				if ("result" in response) {
 					resolve({ result: response.result! });
 				} else {
 					if (!response.error) {
-						/*if (this.logger) {
-                            this.logger.debug({
-                                text: "Response had neither 'result' nor 'error' field set.",
-                                message: response
-                            });
-                        }*/
-						// we could also resolve here, setting our own error
 						reject(
 							new Error(
 								"Response had neither 'result' nor 'error' field set."
@@ -190,8 +190,9 @@ export class StreamBasedChannel implements Channel {
 				}
 			});
 
-			this.stream.write(msg).then(undefined, reason => {
-				this.unprocessedResponses.delete("" + msg.id);
+			this.stream.write(message).then(undefined, reason => {
+				// Assuming no response will ever be sent as sending failed.
+				this.unprocessedResponses.delete(strId);
 				reject(reason);
 			});
 		});

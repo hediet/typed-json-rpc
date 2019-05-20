@@ -1,11 +1,22 @@
 import { Message, BaseMessageStream } from "@hediet/typed-json-rpc";
 import { ChildProcess } from "child_process";
 
+/**
+ * Wraps a write and read stream.
+ */
 export class NodeJsMessageStream extends BaseMessageStream {
+	/**
+	 * Gets a stream that uses `process.stdout` for writing
+	 * and `process.stdin` for reading.
+	 */
 	public static connectToThisProcess(): NodeJsMessageStream {
 		return new NodeJsMessageStream(process.stdout, process.stdin);
 	}
 
+	/**
+	 * Gets a stream that uses `process.stdin` for writing
+	 * and `process.stdout` for reading of the given process `process`.
+	 */
 	public static connectToProcess(process: ChildProcess): NodeJsMessageStream {
 		return new NodeJsMessageStream(process.stdin!, process.stdout!);
 	}
@@ -42,6 +53,9 @@ export class NodeJsMessageStream extends BaseMessageStream {
 		});
 	}
 
+	/**
+	 * Closes the write stream.
+	 */
 	public close(): void {
 		this.writeStream.end();
 	}
