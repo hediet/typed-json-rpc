@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/typed-json-rpc",
 	"description": "A strongly typed JSON RPC implementation.",
-	"version": "0.7.0",
+	"version": "0.7.1",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
