@@ -14,11 +14,12 @@
 		"src"
 	],
 	"scripts": {
-		"dev": "tsc --watch"
+		"dev": "tsc --watch",
+		"build": "tsc"
 	},
 	"dependencies": {
 		"@hediet/std": "^0.4.0",
-		"@hediet/typed-json-rpc": "^0.6.0"
+		"@hediet/typed-json-rpc": "^0.7.0"
 	},
 	"publishConfig": {
 		"access": "public",
