@@ -6,6 +6,7 @@ import {
 	contract,
 	requestContract,
 	notificationContract,
+	ConsoleRpcLogger,
 } from "@hediet/typed-json-rpc";
 import { string, type, number } from "io-ts";
 
@@ -27,20 +28,34 @@ const api = contract({
 	},
 });
 
-// main:
-const worker = new Worker("./worker.ts");
-const { server } = api.getServerFromStream(connectToWorker(worker), undefined, {
-	progress: ({ progress }) => {
-		console.log(progress);
-	},
-});
+if (typeof window !== "undefined") {
+	// window:
+	const worker = new Worker("./browser-worker.ts");
+	const { server } = api.getServerFromStream(
+		connectToWorker(worker),
+		new ConsoleRpcLogger(),
+		{
+			progress: ({ progress }) => {
+				console.log(progress);
+			},
+		}
+	);
 
-server.calculate({ name: "foo" });
-
-// worker:
-api.registerServerToStream(workerConnectToParent(), undefined, {
-	calculate: async ({ name }, { counterpart }) => {
-		counterpart.progress({ progress: 100 });
-		return "bla" + name;
-	},
-});
+	server.calculate({ name: "foo" }).catch(console.error);
+} else {
+	// worker:
+	const { client, channel } = api.registerServerToStream(
+		workerConnectToParent(),
+		new ConsoleRpcLogger(),
+		{
+			calculate: async ({ name }, { counterpart }) => {
+				for (let i = 0; i <= 10; i++) {
+					for (let j = 0; j < 100000000; j++) {}
+					client.progress({ progress: i / 10 });
+				}
+				throw "test";
+				return "bla" + name;
+			},
+		}
+	);
+}

@@ -10,8 +10,12 @@
 	},
 	"dependencies": {
 		"@hediet/typed-json-rpc": "^0.6.0",
+		"@hediet/typed-json-rpc-browser": "^0.7.0",
 		"@hediet/typed-json-rpc-websocket": "^0.6.0",
-		"@hediet/typed-json-rpc-websocket-server": "^0.6.0",
-		"@hediet/typed-json-rpc-browser": "^0.6.0"
+		"@hediet/typed-json-rpc-websocket-server": "^0.6.0"
+	},
+	"devDependencies": {
+		"parcel": "^1.12.3",
+		"typescript": "^3.4.5"
 	}
 }
