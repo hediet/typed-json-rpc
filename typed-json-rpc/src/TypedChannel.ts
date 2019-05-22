@@ -16,6 +16,7 @@ import {
 import { RpcLogger } from "./Logger";
 import { StreamBasedChannel, MessageStream } from ".";
 import { Deferred } from "@hediet/std/synchronization";
+import { startTimeout } from "@hediet/std/timer";
 
 export type RuntimeJsonType<T> = t.Type<T, JSONValue, unknown>;
 export type RuntimeJsonTypeArrOrObj<T> = t.Type<
@@ -84,14 +85,15 @@ export class TypedChannel {
 	private readonly unknownNotificationHandler = new Set<
 		(notification: RequestObject) => void
 	>();
-	private timeoutHandle: any;
+	private timeout: Disposable | undefined;
+	public sendExceptionDetails: boolean = false;
 
 	constructor(
 		private readonly channelCtor: ChannelFactory,
 		private readonly logger: RpcLogger | undefined
 	) {
 		if (process.env.NODE_ENV !== "production") {
-			this.timeoutHandle = setTimeout(() => {
+			this.timeout = startTimeout(1000, () => {
 				if (!this.channel) {
 					console.warn(
 						`"${
@@ -101,7 +103,7 @@ export class TypedChannel {
 						this
 					);
 				}
-			}, 1000);
+			});
 		}
 	}
 
@@ -121,9 +123,9 @@ export class TypedChannel {
 				}" can be called only once, but it already has been called.`
 			);
 		}
-		if (this.timeoutHandle) {
-			clearInterval(this.timeoutHandle);
-			this.timeoutHandle = undefined;
+		if (this.timeout) {
+			this.timeout.dispose();
+			this.timeout = undefined;
 		}
 		this.channel = this.channelCtor.createChannel({
 			handleRequest: (req, id) => this.handleRequest(req, id),
@@ -167,11 +169,13 @@ export class TypedChannel {
 		}
 
 		if (handler.kind != "request") {
+			const message = `"${
+				request.method
+			}" is registered as notification, but was sent as request.`;
+
 			if (this.logger) {
 				this.logger.debug({
-					text: `"${
-						request.method
-					}" is registered as notification, but was sent as request.`,
+					text: message,
 					data: { requestObject: request },
 				});
 			}
@@ -179,9 +183,7 @@ export class TypedChannel {
 			return {
 				error: {
 					code: ErrorCode.invalidRequest,
-					message: `"${
-						request.method
-					}" is registered as notification, but was sent as request.`,
+					message: message,
 					data: { method: request.method },
 				},
 			};
@@ -191,11 +193,13 @@ export class TypedChannel {
 			request.params
 		);
 		if (decodeResult.isLeft()) {
+			const message = `Got invalid params: ${decodeResult.value
+				.map(e => e.message)
+				.join(", ")}.`;
+
 			if (this.logger) {
 				this.logger.debug({
-					text: `Got invalid params: ${decodeResult.value
-						.map(e => e.message)
-						.join(", ")}.`,
+					text: message,
 					data: {
 						requestObject: request,
 						errors: decodeResult.value,
@@ -206,7 +210,7 @@ export class TypedChannel {
 			return {
 				error: {
 					code: ErrorCode.invalidParams,
-					message: decodeResult.value.map(e => e.message).join(", "),
+					message,
 					data: {
 						errors: decodeResult.value.map(e => e.message || null),
 					},
@@ -250,7 +254,9 @@ export class TypedChannel {
 				response = {
 					error: {
 						code: ErrorCode.unexpectedServerError,
-						message: "Server has thrown an unexpected exception",
+						message: this.sendExceptionDetails
+							? `An exception was thrown while handling a request: ${exception.toString()}.`
+							: "Server has thrown an unexpected exception",
 					},
 				};
 			}
