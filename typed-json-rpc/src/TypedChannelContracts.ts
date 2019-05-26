@@ -388,7 +388,7 @@ export class Contract<
 	/**
 	 * Gets a server object directly from a stream by constructing a new `TypedChannel`.
 	 * It also registers the client implementation to the stream.
-	 * The channel starts listening with the next event loop.
+	 * The channel starts listening immediately.
 	 */
 	public getServerFromStream(
 		stream: MessageStream,
@@ -400,9 +400,7 @@ export class Contract<
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
 		const { server } = this.getServer(channel, clientImplementation);
-		setTimeout(() => {
-			channel.startListen();
-		}, 0);
+		channel.startListen();
 
 		return { channel, server };
 	}
@@ -410,7 +408,7 @@ export class Contract<
 	/**
 	 * Gets a client object directly from a stream by constructing a new `TypedChannel`.
 	 * It also registers the server implementation to the stream.
-	 * The channel starts listening with the next event loop.
+	 * The channel starts listening immediately.
 	 */
 	public registerServerToStream(
 		stream: MessageStream,
@@ -422,10 +420,7 @@ export class Contract<
 	} {
 		const channel = TypedChannel.fromStream(stream, logger);
 		const { client } = this.registerServer(channel, serverImplementation);
-		setTimeout(() => {
-			channel.startListen();
-		}, 0);
-
+		channel.startListen();
 		return { channel, client };
 	}
 
