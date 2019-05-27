@@ -207,3 +207,7 @@ const { server } = myRpcContract.getServerFromStream(
 # Architecture of `@hediet/typed-json-rpc`
 
 ![classes](docs/exported/main/Main.png)
+
+Extend `BaseMessageStream` if you want to implement custom message transport.
+
+Implement `Channel` or `ChannelFactory` if you already provide a request/response channel.
