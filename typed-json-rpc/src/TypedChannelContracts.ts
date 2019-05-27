@@ -8,6 +8,7 @@ import {
 	RuntimeJsonTypeArrOrObj,
 	RequestHandlingError,
 	ErrorResult,
+	RequestHandlerFunc,
 } from "./TypedChannel";
 import { RequestId } from "./JsonRpcTypes";
 import { MessageStream } from "./MessageStream";
@@ -93,12 +94,16 @@ export type ContractToRequest<TRequestMap extends OneSideContract> = {
 		: NotificationType<TRequestMap[TRequest]["paramType"]["_A"]>
 };
 
+export type EmptyObjectToVoid<T> = {} extends T ? (void | T) : T;
+
 export type ContractInterfaceOf<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? (
-				arg: TRequestMap[TRequest]["paramType"]["_A"]
+				arg: EmptyObjectToVoid<TRequestMap[TRequest]["paramType"]["_A"]>
 		  ) => Promise<TRequestMap[TRequest]["resultType"]["_A"]>
-		: (arg: TRequestMap[TRequest]["paramType"]["_A"]) => void
+		: (
+				arg: EmptyObjectToVoid<TRequestMap[TRequest]["paramType"]["_A"]>
+		  ) => void
 };
 
 /** Marks a type as error wrapper. */
@@ -280,73 +285,82 @@ export abstract class AbstractContract<
 			string,
 			NotificationType<any> | RequestType<any, any, any>
 		>,
-		myInterface: Record<string, any>,
+		myInterface: Record<string, Function>,
 		context: TContext
 	): { counterpart: Record<string, unknown> } & Disposable {
-		const disposables = new Array<Disposable>();
+		const counterpart = this.buildCounterpart(typedChannel, otherContract);
+		const disposable = this.registerHandlers(
+			typedChannel,
+			myContract,
+			myInterface,
+			context,
+			counterpart
+		);
+
+		return { counterpart, ...disposable };
+	}
+
+	private buildCounterpart(
+		typedChannel: TypedChannel,
+		otherContract: Record<
+			string,
+			NotificationType<any> | RequestType<any, any, any>
+		>
+	): Record<string, unknown> {
 		const counterpart: Record<string, unknown> = {};
-		// send methods
 		for (const [key, req] of Object.entries(otherContract)) {
 			let method;
 			if (req.kind === "request") {
 				method = (args: any) => {
+					if (args === undefined) {
+						args = {};
+					}
 					return typedChannel.request(req, args);
 				};
 			} else {
 				method = (args: any) => {
+					if (args === undefined) {
+						args = {};
+					}
 					return typedChannel.notify(req, args);
 				};
 			}
 
 			counterpart[key] = method;
 		}
+		return counterpart;
+	}
+
+	private registerHandlers<TContext>(
+		typedChannel: TypedChannel,
+		myContract: Record<
+			string,
+			NotificationType<any> | RequestType<any, any, any>
+		>,
+		myInterface: Record<string, Function>,
+		context: TContext,
+		counterpart: Record<string, unknown>
+	): Disposable {
+		const disposables = new Array<Disposable>();
 
 		const notificationInfo: HandlerInfo<any, TContext> = {
 			context,
 			counterpart,
 		};
 
-		// handlers
 		for (const [key, req] of Object.entries(myContract)) {
 			if (req.kind === "request") {
 				const method = myInterface[key];
 				if (!method) {
 					throw new Error(`No handler for "${key}" given!`);
 				}
+				const handler = this.createRequestHandler<TContext>(
+					context,
+					counterpart,
+					method
+				);
 				disposables.push(
-					typedChannel.registerRequestHandler(
-						req,
-						async (args, requestId) => {
-							try {
-								const requestInfo: RequestHandlerInfo<
-									any,
-									any,
-									TContext
-								> = {
-									context,
-									counterpart,
-									newErr: ErrorWrapper.factory,
-									requestId,
-								};
-								const result = await method(args, requestInfo);
-								if (result instanceof ErrorWrapper) {
-									return result.error;
-								}
-
-								return { ok: result };
-							} catch (e) {
-								if (e instanceof RequestHandlingError) {
-									return {
-										error: e.data,
-										errorCode: e.code,
-										errorMessage: e.message,
-									};
-								} else {
-									throw e;
-								}
-							}
-						}
-					)
+					typedChannel.registerRequestHandler(req, handler)
 				);
 			} else {
 				const method = myInterface[key];
@@ -361,7 +375,39 @@ export abstract class AbstractContract<
 			}
 		}
 
-		return { counterpart, dispose: () => dispose(disposables) };
+		return Disposable.create(disposables);
+	}
+
+	private createRequestHandler<TContext>(
+		context: TContext,
+		counterpart: Record<string, unknown>,
+		method: Function
+	): RequestHandlerFunc<any, any, any> {
+		return async (args, requestId) => {
+			try {
+				const requestInfo: RequestHandlerInfo<any, any, TContext> = {
+					context,
+					counterpart,
+					newErr: ErrorWrapper.factory,
+					requestId,
+				};
+				const result = await method(args, requestInfo);
+				if (result instanceof ErrorWrapper) {
+					return result.error;
+				}
+				return { ok: result };
+			} catch (e) {
+				if (e instanceof RequestHandlingError) {
+					return {
+						error: e.data,
+						errorCode: e.code,
+						errorMessage: e.message,
+					};
+				} else {
+					throw e;
+				}
+			}
+		};
 	}
 }
 

@@ -12,6 +12,7 @@ import { startWebSocketServer } from "@hediet/typed-json-rpc-websocket-server";
 const c = contract({
 	server: {
 		sendMessage: requestContract({ params: t.type({ msg: t.string }) }),
+		ping: requestContract({}),
 	},
 	client: {
 		onNewMessage: notificationContract({
@@ -21,10 +22,9 @@ const c = contract({
 });
 
 const clients = new Set<typeof c.TClientInterface>();
-
 const logger = new ConsoleRpcLogger();
 
-startWebSocketServer({ port: 12345 }, stream => {
+startWebSocketServer({ port: 12345 }, async stream => {
 	const { client } = c.registerServerToStream(stream, logger, {
 		sendMessage: async (args, {}) => {
 			console.log(args.msg);
@@ -32,8 +32,11 @@ startWebSocketServer({ port: 12345 }, stream => {
 				c.onNewMessage({ msg: args.msg });
 			}
 		},
+		ping: async () => {},
 	});
 	clients.add(client);
+	await stream.onClosed;
+	clients.delete(client);
 });
 
 async function main() {
@@ -46,7 +49,8 @@ async function main() {
 			onNewMessage: (args, {}) => console.log("onNewMessage: ", args.msg),
 		}
 	);
-	server.sendMessage({ msg: "hellow world" });
+	server.sendMessage({ msg: "hello world" });
+	server.ping();
 }
 
 main();
