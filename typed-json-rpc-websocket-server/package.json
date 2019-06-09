@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/typed-json-rpc-websocket-server",
 	"description": "Provides a websocket based JSON RPC server.",
-	"version": "0.7.6",
+	"version": "0.7.7",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
