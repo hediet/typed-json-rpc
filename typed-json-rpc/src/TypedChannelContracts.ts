@@ -297,7 +297,7 @@ export abstract class AbstractContract<
 			counterpart
 		);
 
-		return { counterpart, ...disposable };
+		return { counterpart, dispose: () => disposable.dispose() };
 	}
 
 	private buildCounterpart(
