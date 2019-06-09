@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/typed-json-rpc-websocket-server",
 	"description": "Provides a websocket based JSON RPC server.",
-	"version": "0.7.0",
+	"version": "0.7.6",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
@@ -17,10 +17,10 @@
 		"dev": "tsc --watch"
 	},
 	"dependencies": {
-		"@hediet/std": "^0.4.0",
-		"@hediet/typed-json-rpc": "^0.6.0",
+		"@hediet/std": "^0.6.0",
+		"@hediet/typed-json-rpc": "^0.7.5",
 		"@types/ws": "^6.0.1",
-		"ws": "^6.2.0"
+		"ws": "^7.0.0"
 	},
 	"publishConfig": {
 		"access": "public",
