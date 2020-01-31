@@ -11,31 +11,31 @@ Is compatible with JSON RPC 2.0. However, only object arguments are supported at
 To install the base library:
 
 ```
-yarn add @hediet/typed-json-rpc
+yarn add @hediet/json-rpc
 ```
 
 For websocket clients:
 
 ```
-yarn add @hediet/typed-json-rpc-websocket
+yarn add @hediet/json-rpc-websocket
 ```
 
 For websocket servers:
 
 ```
-yarn add @hediet/typed-json-rpc-websocket-server
+yarn add @hediet/json-rpc-websocket-server
 ```
 
 For webworker communication:
 
 ```
-yarn add @hediet/typed-json-rpc-browser
+yarn add @hediet/json-rpc-browser
 ```
 
 For process stdio communication:
 
 ```
-yarn add @hediet/typed-json-rpc-streams
+yarn add @hediet/json-rpc-streams
 ```
 
 # Features
@@ -62,7 +62,7 @@ import {
 	contract,
 	requestContract,
 	notificationContract,
-} from "@hediet/typed-json-rpc";
+} from "@hediet/json-rpc";
 
 const myRpcContract = contract({
 	// the interface for clients to interact with servers
@@ -92,7 +92,7 @@ const myRpcContract = contract({
 Server:
 
 ```ts
-import { startWebSocketServer } from "@hediet/typed-json-rpc-websocket-server";
+import { startWebSocketServer } from "@hediet/json-rpc-websocket-server";
 
 const clients = new Set<typeof myRpcContract.TClientInterface>();
 startWebSocketServer({ port: 12345 }, async stream => {
@@ -118,7 +118,7 @@ startWebSocketServer({ port: 12345 }, async stream => {
 Client:
 
 ```ts
-import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
+import { WebSocketStream } from "@hediet/json-rpc-websocket";
 
 const { server } = myRpcContract.getServerFromStream(
 	await WebSocketStream.connectTo({ address: "ws://localhost:12345" }),
@@ -135,7 +135,7 @@ const result = await server.calculate({ data: "some data" });
 Main process:
 
 ```ts
-import { NodeJsMessageStream } from "@hediet/typed-json-rpc-streams";
+import { NodeJsMessageStream } from "@hediet/json-rpc-streams";
 
 const proc = spawn("node", [join(__dirname, "echo-process")]);
 const stream = ;
@@ -152,7 +152,7 @@ const result = await server.calculate({ data: "some data" });
 Child process:
 
 ```ts
-import { NodeJsMessageStream } from "@hediet/typed-json-rpc-streams";
+import { NodeJsMessageStream } from "@hediet/json-rpc-streams";
 
 const { server } = myRpcContract.getServerFromStream(
 	NodeJsMessageStream.connectToThisProcess(),
@@ -173,7 +173,7 @@ Main window:
 ```ts
 import {
 	connectToWorker
-} from "@hediet/typed-json-rpc-browser";
+} from "@hediet/json-rpc-browser";
 
 const worker = new Worker("./browser-worker.ts");
 const stream = ;
@@ -190,7 +190,7 @@ const result = await server.calculate({ data: "some data" });
 Web-Worker:
 
 ```ts
-import { workerConnectToParent } from "@hediet/typed-json-rpc-browser";
+import { workerConnectToParent } from "@hediet/json-rpc-browser";
 
 const { server } = myRpcContract.getServerFromStream(
 	workerConnectToParent(),
@@ -204,7 +204,7 @@ const { server } = myRpcContract.getServerFromStream(
 );
 ```
 
-# Architecture of `@hediet/typed-json-rpc`
+# Architecture of `@hediet/json-rpc`
 
 ![classes](docs/exported/main/Main.png)
 

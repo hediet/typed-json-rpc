@@ -1,46 +1,66 @@
 import {
 	contract,
-	types as t,
-	requestContract,
-	notificationContract,
+	semanticJson as s,
 	ConsoleRpcLogger,
 	ConsoleStreamLogger,
-} from "@hediet/typed-json-rpc";
-import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
-import { startWebSocketServer } from "@hediet/typed-json-rpc-websocket-server";
+	registerReflector,
+	reflectContract,
+	TypedChannel,
+	Contract,
+	requestType,
+	notificationType,
+	ErrorCode,
+} from "@hediet/json-rpc";
+import { WebSocketStream } from "@hediet/json-rpc-websocket";
+import { startWebSocketServer } from "@hediet/json-rpc-websocket-server";
 
-const c = contract({
+const chatContract = contract({
+	name: "ChatContract",
 	server: {
-		sendMessage: requestContract({ params: t.type({ msg: t.string }) }),
-		ping: requestContract({}),
+		sendMessage: requestType({
+			params: s.sArray(s.sString).refine<{ msg: string }>({
+				canSerialize: (obj): obj is { msg: string } => true,
+				deserialize: o => s.deserializationValue({ msg: o[0] }),
+				serialize: o => [o.msg],
+			}),
+		}),
+		ping: requestType({}),
 	},
 	client: {
-		onNewMessage: notificationContract({
-			params: t.type({ msg: t.string }),
+		onNewMessage: notificationType({
+			params: s.sObject({ msg: s.sString }),
 		}),
 	},
 });
 
-const clients = new Set<typeof c.TClientInterface>();
+const clients = new Set<typeof chatContract.TClientInterface>();
 const logger = new ConsoleRpcLogger();
 
-startWebSocketServer({ port: 12345 }, async stream => {
-	const { client } = c.registerServerToStream(stream, logger, {
-		sendMessage: async (args, {}) => {
-			console.log(args.msg);
-			for (const c of clients) {
-				c.onNewMessage({ msg: args.msg });
-			}
-		},
-		ping: async () => {},
-	});
+startWebSocketServer({ listenOn: { port: "random" } }, async stream => {
+	const { client, channel } = Contract.registerServerToStream(
+		chatContract,
+		stream,
+		logger,
+		{
+			sendMessage: async args => {
+				console.log(args.msg);
+				for (const c of clients) {
+					c.onNewMessage({ msg: args.msg });
+				}
+			},
+			ping: async ({}) => {},
+		}
+	);
+
+	registerReflector(channel);
 	clients.add(client);
 	await stream.onClosed;
 	clients.delete(client);
 });
 
 async function main() {
-	const { server } = c.getServerFromStream(
+	const { server, channel } = Contract.getServerFromStream(
+		chatContract,
 		new ConsoleStreamLogger(
 			await WebSocketStream.connectTo({ address: "ws://localhost:12345" })
 		),
@@ -49,7 +69,13 @@ async function main() {
 			onNewMessage: (args, {}) => console.log("onNewMessage: ", args.msg),
 		}
 	);
-	server.sendMessage({ msg: "hello world" });
+
+	const { server: rs } = reflectContract.getServer(channel, {});
+
+	require("C:\\Users\\henni\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\easy-attach\\")();
+	const data = await rs.list();
+	console.log(data);
+	server.sendMessage({ msg: "Hello world" });
 	server.ping();
 }
 

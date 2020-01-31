@@ -1,7 +1,7 @@
 {
-	"name": "@hediet/typed-json-rpc-streams",
+	"name": "@hediet/json-rpc-streams",
 	"description": "Provides a NodeJS Stream to MessageStream adapter. Enables RPC calls through StdIn/StdOut",
-	"version": "0.7.6",
+	"version": "0.1.0",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
@@ -22,7 +22,7 @@
 	},
 	"dependencies": {
 		"@hediet/std": "^0.6.0",
-		"@hediet/typed-json-rpc": "^0.7.5",
+		"@hediet/json-rpc": "^0.1.0",
 		"@types/node": "^12.0.7"
 	},
 	"devDependencies": {

@@ -1,7 +1,7 @@
 {
-	"name": "@hediet/typed-json-rpc-websocket",
-	"description": "Provides a WebSocket to MessageStream adapter. Enables RPC calls to websocket server.",
-	"version": "0.7.7",
+	"name": "@hediet/json-rpc-websocket-server",
+	"description": "Provides a websocket based JSON RPC server.",
+	"version": "0.1.0",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
@@ -17,9 +17,10 @@
 		"dev": "tsc --watch"
 	},
 	"dependencies": {
-		"@hediet/typed-json-rpc": "^0.7.5",
+		"@hediet/std": "^0.6.0",
+		"@hediet/json-rpc": "^0.1.0",
 		"@types/ws": "^6.0.1",
-		"isomorphic-ws": "^4.0.1"
+		"ws": "^7.0.0"
 	},
 	"publishConfig": {
 		"access": "public",

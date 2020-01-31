@@ -77,7 +77,10 @@ export class StreamBasedChannel implements Channel {
 			}
 
 			try {
-				await this.listener.handleNotification(message);
+				await this.listener.handleNotification({
+					method: message.method,
+					params: message.params || null,
+				});
 			} catch (exception) {
 				if (this.logger) {
 					this.logger.warn({
@@ -92,7 +95,10 @@ export class StreamBasedChannel implements Channel {
 			if (this.listener) {
 				try {
 					result = await this.listener.handleRequest(
-						message,
+						{
+							method: message.method,
+							params: message.params || null,
+						},
 						message.id
 					);
 				} catch (exception) {
@@ -131,9 +137,17 @@ export class StreamBasedChannel implements Channel {
 			}
 			let responseMsg: ResponseMessage;
 			if ("result" in result) {
-				responseMsg = { id: message.id, result: result.result };
+				responseMsg = {
+					jsonrpc: "2.0",
+					id: message.id,
+					result: result.result,
+				};
 			} else {
-				responseMsg = { id: message.id, error: result.error };
+				responseMsg = {
+					jsonrpc: "2.0",
+					id: message.id,
+					error: result.error,
+				};
 			}
 			await this.stream.write(responseMsg);
 		}
@@ -163,10 +177,11 @@ export class StreamBasedChannel implements Channel {
 		request: RequestObject,
 		messageIdCallback?: (requestId: RequestId) => void
 	): Promise<ResponseObject> {
-		const message = {
+		const message: Message = {
+			jsonrpc: "2.0",
 			id: this.newRequestId(),
 			method: request.method,
-			params: request.params,
+			params: request.params || undefined,
 		};
 
 		if (messageIdCallback) {
@@ -200,9 +215,10 @@ export class StreamBasedChannel implements Channel {
 
 	public sendNotification(notification: RequestObject): Promise<void> {
 		const msg: Message = {
+			jsonrpc: "2.0",
 			id: undefined,
 			method: notification.method,
-			params: notification.params,
+			params: notification.params || undefined,
 		};
 		return this.stream.write(msg);
 	}

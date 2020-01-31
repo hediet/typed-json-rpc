@@ -1,11 +1,11 @@
 {
 	"private": true,
 	"workspaces": [
-		"typed-json-rpc",
-		"typed-json-rpc-websocket",
-		"typed-json-rpc-websocket-server",
-		"typed-json-rpc-streams",
-		"typed-json-rpc-browser",
+		"json-rpc",
+		"json-rpc-websocket",
+		"json-rpc-websocket-server",
+		"json-rpc-streams",
+		"json-rpc-browser",
 		"demo"
 	]
 }

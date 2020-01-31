@@ -1,14 +1,19 @@
 import WebSocket = require("ws");
-import { WebSocketStream } from "@hediet/typed-json-rpc-websocket";
+import { WebSocketStream } from "@hediet/json-rpc-websocket";
 import { EventEmitter, EventSource } from "@hediet/std/events";
 import { Barrier } from "@hediet/std/synchronization";
+import * as http from "http";
+import * as https from "https";
 
 export interface StartWebSocketServerOptions {
 	/**
-	 * The port to listen on. Use `undefined` to listen on a random port.
-	 * You can then use `WebSocketServer.port` to get the chosen port.
+	 * Where to listen on.
+	 * Use `port` to listen on a specific or random port.
+	 * Use `server` to listen on an existing server.
 	 */
-	port?: number | undefined;
+	listenOn:
+		| { port: number | "random" }
+		| { server: http.Server | https.Server };
 }
 
 /**
@@ -20,8 +25,11 @@ export function startWebSocketServer(
 	handleConnection: (stream: WebSocketStream) => void
 ): WebSocketServer {
 	let opts: WebSocket.ServerOptions = {};
-	if (options.port !== undefined) {
-		opts.port = options.port;
+	const l = options.listenOn;
+	if ("port" in l) {
+		opts.port = l.port === "random" ? 0 : l.port;
+	} else if ("server" in l) {
+		opts.server = l.server;
 	}
 
 	const wss = new WebSocket.Server(opts);

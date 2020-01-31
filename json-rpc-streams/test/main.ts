@@ -1,7 +1,7 @@
 import { NodeJsMessageStream } from "../src";
 import { spawn } from "child_process";
 import { join } from "path";
-import { Message } from "@hediet/typed-json-rpc";
+import { Message } from "@hediet/json-rpc";
 import { deepEqual } from "assert";
 import { wait } from "@hediet/std/timer";
 

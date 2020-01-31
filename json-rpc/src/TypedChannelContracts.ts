@@ -1,19 +1,16 @@
-import * as t from "io-ts";
+import { Serializer, JSONObject, sObject, sVoid } from "@hediet/semantic-json";
 import {
 	RequestType,
 	NotificationType,
 	TypedChannel,
-	RuntimeJsonType,
-	voidType,
-	RuntimeJsonTypeArrOrObj,
 	RequestHandlingError,
 	ErrorResult,
 	RequestHandlerFunc,
 } from "./TypedChannel";
-import { RequestId } from "./JsonRpcTypes";
+import { RequestId, JSONArray } from "./JsonRpcTypes";
 import { MessageStream } from "./MessageStream";
 import { RpcLogger } from "./Logger";
-import { Disposable, dispose } from "@hediet/std/disposable";
+import { Disposable } from "@hediet/std/disposable";
 
 /**
  * Describes a request type as part of a `Contract`.
@@ -40,42 +37,6 @@ export type ContractNotificationType<TArgs = unknown> = NotificationType<
 export type AsNotificationContract<T extends ContractNotificationType> = T;
 
 /**
- * Describes a request type as part of a `Contract`.
- */
-export function requestContract<
-	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
-	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
-	TError extends RuntimeJsonType<any> = RuntimeJsonType<undefined>
->(request: {
-	method?: string;
-	params?: TParams;
-	result?: TResult;
-	error?: TError;
-}): ContractRequestType<TParams["_A"], TResult["_A"], TError["_A"]> {
-	return new RequestType(
-		request.method,
-		request.params ? request.params : t.type({}),
-		request.result ? request.result : voidType,
-		request.error ? request.error : voidType
-	);
-}
-
-/**
- * Describes a notification type as part of a `Contract`.
- */
-export function notificationContract<
-	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>
->(notification: {
-	method?: string;
-	params?: TParams;
-}): ContractNotificationType<TParams["_A"]> {
-	return new NotificationType(
-		notification.method,
-		notification.params ? notification.params : t.type({})
-	);
-}
-
-/**
  * Describes one side of a contract.
  */
 export type OneSideContract = Record<
@@ -87,23 +48,27 @@ export type AsOneSideContract<T extends OneSideContract> = T;
 export type ContractToRequest<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? RequestType<
-				TRequestMap[TRequest]["paramType"]["_A"],
-				TRequestMap[TRequest]["resultType"]["_A"],
-				TRequestMap[TRequest]["errorType"]["_A"]
+				TRequestMap[TRequest]["paramsSerializer"]["TValue"],
+				TRequestMap[TRequest]["resultSerializer"]["TValue"],
+				TRequestMap[TRequest]["errorSerializer"]["TValue"]
 		  >
-		: NotificationType<TRequestMap[TRequest]["paramType"]["_A"]>
+		: NotificationType<TRequestMap[TRequest]["paramsSerializer"]["TValue"]>;
 };
 
-export type EmptyObjectToVoid<T> = {} extends T ? (void | T) : T;
+export type EmptyObjectToVoid<T> = {} extends T ? void | T : T;
 
 export type ContractInterfaceOf<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? (
-				arg: EmptyObjectToVoid<TRequestMap[TRequest]["paramType"]["_A"]>
-		  ) => Promise<TRequestMap[TRequest]["resultType"]["_A"]>
+				arg: EmptyObjectToVoid<
+					TRequestMap[TRequest]["paramsSerializer"]["TValue"]
+				>
+		  ) => Promise<TRequestMap[TRequest]["resultSerializer"]["TValue"]>
 		: (
-				arg: EmptyObjectToVoid<TRequestMap[TRequest]["paramType"]["_A"]>
-		  ) => void
+				arg: EmptyObjectToVoid<
+					TRequestMap[TRequest]["paramsSerializer"]["TValue"]
+				>
+		  ) => void;
 };
 
 /** Marks a type as error wrapper. */
@@ -130,38 +95,38 @@ export type ContractHandlerOf<
 		TRequestMap
 	>]: TRequestMap[TKey] extends AnyRequestContract
 		? (
-				arg: TRequestMap[TKey]["paramType"]["_A"],
+				arg: TRequestMap[TKey]["paramsSerializer"]["TValue"],
 				info: RequestHandlerInfo<
-					TRequestMap[TKey]["errorType"]["_A"],
+					TRequestMap[TKey]["errorSerializer"]["TValue"],
 					ContractInterfaceOf<TCounterPartRequestMap>,
 					TContext
 				>
 		  ) => Promise<
-				| TRequestMap[TKey]["resultType"]["_A"]
-				| ErrorWrapper<TRequestMap[TKey]["errorType"]["_A"]>
+				| TRequestMap[TKey]["resultSerializer"]["TValue"]
+				| ErrorWrapper<TRequestMap[TKey]["errorSerializer"]["TValue"]>
 		  >
-		: never // cannot happen
+		: never; // cannot happen
 } &
 	{
 		[TKey in NotificationKeys<TRequestMap>]?: (
-			arg: TRequestMap[TKey]["paramType"]["_A"],
+			arg: TRequestMap[TKey]["paramsSerializer"]["TValue"],
 			info: HandlerInfo<
 				ContractInterfaceOf<TCounterPartRequestMap>,
 				TContext
 			>
-		) => void
+		) => void;
 	};
 
 export type RequestKeys<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? TRequest
-		: never
+		: never;
 }[keyof TRequestMap];
 
 export type NotificationKeys<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? never
-		: TRequest
+		: TRequest;
 }[keyof TRequestMap];
 
 /**
@@ -175,31 +140,19 @@ export interface ContractObject {
 /**
  * Describes a new contract.
  */
-export function contract<TContractObject extends ContractObject>(
-	contractObj: TContractObject
-): Contract<never, TContractObject>;
 export function contract<
-	TTags extends string,
-	TContractObject extends ContractObject
->(
-	tags: TTags[],
-	contractObj: TContractObject
-): Contract<TTags, TContractObject>;
-export function contract<TContractObject extends ContractObject>(
-	...args: any[]
-): Contract<string, TContractObject> {
-	let tags = [];
-	let contractObj: TContractObject = undefined!;
-	if (args.length == 2) {
-		tags = args[0];
-		contractObj = args[1];
-	} else {
-		contractObj = args[0];
-	}
-
+	TServer extends OneSideContract,
+	TClient extends OneSideContract,
+	TTags extends string = never
+>(contractObj: {
+	name: string;
+	tags?: TTags[];
+	server: TServer;
+	client: TClient;
+}): Contract<TTags, { server: TServer; client: TClient }> {
 	const server = transform(contractObj["server"]);
 	const client = transform(contractObj["client"]);
-	return new Contract(tags, server as any, client as any);
+	return new Contract(contractObj.tags || [], server as any, client as any);
 }
 
 function transform(
@@ -352,7 +305,9 @@ export abstract class AbstractContract<
 			if (req.kind === "request") {
 				const method = myInterface[key];
 				if (!method) {
-					throw new Error(`No handler for "${key}" given!`);
+					throw new Error(
+						`No handler for request with method "${key}" was given!`
+					);
 				}
 				const handler = this.createRequestHandler<TContext>(
 					context,
@@ -415,6 +370,50 @@ export class Contract<
 	TTags extends string,
 	TContractObject extends ContractObject
 > extends AbstractContract<TTags, TContractObject> {
+	/**
+	 * Gets a server object directly from a stream by constructing a new `TypedChannel`.
+	 * It also registers the client implementation to the stream.
+	 * The channel starts listening immediately.
+	 */
+	public static getServerFromStream<TContract extends Contract<any, any>>(
+		contract: TContract,
+		stream: MessageStream,
+		logger: RpcLogger | undefined,
+		clientImplementation: TContract["TClientHandler"]
+	): {
+		server: TContract["TServerInterface"];
+		channel: TypedChannel;
+	} {
+		const channel = TypedChannel.fromStream(stream, logger);
+		const { server } = contract.getServer(channel, clientImplementation);
+		channel.startListen();
+
+		return { channel, server };
+	}
+
+	/**
+	 * Gets a client object directly from a stream by constructing a new `TypedChannel`.
+	 * It also registers the server implementation to the stream.
+	 * The channel starts listening immediately.
+	 */
+	public static registerServerToStream<TContract extends Contract<any, any>>(
+		contract: TContract,
+		stream: MessageStream,
+		logger: RpcLogger | undefined,
+		serverImplementation: TContract["TServerHandler"]
+	): {
+		client: TContract["TClientInterface"];
+		channel: TypedChannel;
+	} {
+		const channel = TypedChannel.fromStream(stream, logger);
+		const { client } = contract.registerServer(
+			channel,
+			serverImplementation
+		);
+		channel.startListen();
+		return { channel, client };
+	}
+
 	public get TClientHandler(): ContractHandlerOf<
 		TContractObject["client"],
 		TContractObject["server"],
@@ -429,45 +428,6 @@ export class Contract<
 		undefined
 	> {
 		throw this.onlyDesignTime();
-	}
-
-	/**
-	 * Gets a server object directly from a stream by constructing a new `TypedChannel`.
-	 * It also registers the client implementation to the stream.
-	 * The channel starts listening immediately.
-	 */
-	public getServerFromStream(
-		stream: MessageStream,
-		logger: RpcLogger | undefined,
-		clientImplementation: this["TClientHandler"]
-	): {
-		server: ContractInterfaceOf<TContractObject["server"]>;
-		channel: TypedChannel;
-	} {
-		const channel = TypedChannel.fromStream(stream, logger);
-		const { server } = this.getServer(channel, clientImplementation);
-		channel.startListen();
-
-		return { channel, server };
-	}
-
-	/**
-	 * Gets a client object directly from a stream by constructing a new `TypedChannel`.
-	 * It also registers the server implementation to the stream.
-	 * The channel starts listening immediately.
-	 */
-	public registerServerToStream(
-		stream: MessageStream,
-		logger: RpcLogger | undefined,
-		serverImplementation: this["TServerHandler"]
-	): {
-		client: ContractInterfaceOf<TContractObject["client"]>;
-		channel: TypedChannel;
-	} {
-		const channel = TypedChannel.fromStream(stream, logger);
-		const { client } = this.registerServer(channel, serverImplementation);
-		channel.startListen();
-		return { channel, client };
 	}
 
 	public getServer(

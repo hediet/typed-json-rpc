@@ -1,16 +1,12 @@
+import * as semanticJson from "@hediet/semantic-json";
+
 export function isRequestOrNotification(msg: Message): msg is RequestMessage {
 	return (msg as any).method !== undefined;
 }
 
-export type JSONObject = { [key: string]: JSONValue };
-export interface JSONArray extends Array<JSONValue> {}
-export type JSONValue =
-	| string
-	| number
-	| boolean
-	| null
-	| JSONObject
-	| JSONArray;
+export type JSONValue = semanticJson.JSONValue;
+export type JSONObject = semanticJson.JSONObject;
+export type JSONArray = semanticJson.JSONArray;
 
 export type Message = RequestMessage | ResponseMessage;
 
@@ -19,10 +15,12 @@ export type Message = RequestMessage | ResponseMessage;
  */
 export interface RequestMessage {
 	/**  must not match `rpc\..*` */
+	jsonrpc: "2.0";
 	method: string;
-	params?: JSONValue[] | Record<string, JSONValue>;
+	params?: JSONArray | JSONObject;
 	/** Is not set if the request is a notification. */
 	id?: RequestId;
+	result?: never;
 }
 
 export type RequestId = number | string;
@@ -31,6 +29,7 @@ export type RequestId = number | string;
  * Either result or error is set.
  */
 export interface ResponseMessage {
+	jsonrpc: "2.0";
 	/**
 	 * This member is REQUIRED on success.
 	 * This member MUST NOT exist if there was an error invoking the method.
@@ -47,6 +46,7 @@ export interface ResponseMessage {
 	 * (e.g. Parse error/Invalid Request), it MUST be Null.
 	 */
 	id: RequestId | null;
+	method?: never;
 }
 
 export interface ErrorObject {

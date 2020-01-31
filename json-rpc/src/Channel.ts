@@ -1,8 +1,17 @@
-import { RequestId, ErrorObject, JSONValue } from "./JsonRpcTypes";
+import {
+	RequestId,
+	ErrorObject,
+	JSONValue,
+	JSONArray,
+	JSONObject,
+} from "./JsonRpcTypes";
 
 export interface RequestObject {
 	method: string;
-	params?: JSONValue[] | Record<string, JSONValue>;
+	// Compared to RequestMessage, params must be set, but can be null.
+	// This is designed so that null can be handled by the deserializer
+	// which undefined cannot.
+	params: JSONArray | JSONObject | null;
 }
 
 export type ResponseObject =

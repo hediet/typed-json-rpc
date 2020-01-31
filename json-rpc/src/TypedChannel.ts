@@ -1,4 +1,13 @@
-import * as t from "io-ts";
+import {
+	Serializer,
+	BaseSerializer,
+	sObject,
+	DefaultSerializeContext,
+	SerializeContext,
+	sAny,
+	sVoid,
+	DefaultDeserializeContext,
+} from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import {
 	Channel,
@@ -14,53 +23,10 @@ import {
 	JSONObject,
 } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
-import { StreamBasedChannel, MessageStream } from ".";
+import { MessageStream } from "./MessageStream";
 import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
-
-export type RuntimeJsonType<T> = t.Type<T, JSONValue, unknown>;
-export type RuntimeJsonTypeArrOrObj<T> = t.Type<
-	T,
-	JSONObject | JSONArray,
-	unknown
->;
-
-export type Result<TOk, TError> = OkResult<TOk> | ErrorResult<TError>;
-
-export interface OkResult<TOk> {
-	ok: TOk;
-}
-
-export type ErrorResult<TError> =
-	| {
-			error: TError;
-			errorMessage?: string;
-			errorCode?: ErrorCode;
-	  }
-	| {
-			error?: TError;
-			errorMessage: string;
-			errorCode?: ErrorCode;
-	  };
-
-export type RequestHandlerFunc<TArg, TResult, TError> = (
-	arg: TArg,
-	requestId: RequestId
-) => Promise<Result<TResult, TError>>;
-
-export type NotificationHandlerFunc<TArg> = (arg: TArg) => void;
-
-interface RegisteredRequestHandler<TArg = any, TResult = any, TError = any> {
-	readonly kind: "request";
-	readonly requestType: RequestType<TArg, TResult, TError>;
-	readonly handler: RequestHandlerFunc<TArg, TResult, TError>;
-}
-
-interface RegisteredNotificationHandler<TArg = any> {
-	readonly kind: "notification";
-	readonly notificationType: NotificationType<TArg>;
-	readonly handlers: Set<NotificationHandlerFunc<TArg>>;
-}
+import { StreamBasedChannel } from "./StreamBasedChannel";
 
 /**
  * Represents a typed channel.
@@ -96,9 +62,7 @@ export class TypedChannel {
 			this.timeout = startTimeout(1000, () => {
 				if (!this.channel) {
 					console.warn(
-						`"${
-							this.startListen.name
-						}" has not been called within 1 second after construction of this channel. ` +
+						`"${this.startListen.name}" has not been called within 1 second after construction of this channel. ` +
 							`Did you forget to call it?`,
 						this
 					);
@@ -118,9 +82,7 @@ export class TypedChannel {
 	public startListen(): void {
 		if (this.channel) {
 			throw new Error(
-				`"${
-					this.startListen.name
-				}" can be called only once, but it already has been called.`
+				`"${this.startListen.name}" can be called only once, but it already has been called.`
 			);
 		}
 		if (this.timeout) {
@@ -138,9 +100,7 @@ export class TypedChannel {
 	private checkChannel(channel: Channel | undefined): channel is Channel {
 		if (!channel) {
 			throw new Error(
-				`"${
-					this.startListen.name
-				}" must be called before any messages can be sent or received.`
+				`"${this.startListen.name}" must be called before any messages can be sent or received.`
 			);
 		}
 		return true;
@@ -150,7 +110,15 @@ export class TypedChannel {
 		request: RequestObject,
 		requestId: RequestId
 	): Promise<ResponseObject> {
-		const handler = this.handler.get(request.method);
+		const handler = this.handler.get(request.method) as
+			| RegisteredRequestHandler<
+					{ brand: "params" },
+					{ brand: "result" },
+					{ brand: "error" }
+			  >
+			| RegisteredNotificationHandler<{ brand: "params" }>
+			| undefined;
+
 		if (!handler) {
 			if (this.logger) {
 				this.logger.debug({
@@ -169,9 +137,7 @@ export class TypedChannel {
 		}
 
 		if (handler.kind != "request") {
-			const message = `"${
-				request.method
-			}" is registered as notification, but was sent as request.`;
+			const message = `"${request.method}" is registered as notification, but was sent as request.`;
 
 			if (this.logger) {
 				this.logger.debug({
@@ -189,20 +155,19 @@ export class TypedChannel {
 			};
 		}
 
-		const decodeResult = handler.requestType.paramType.decode(
-			request.params
+		const decodeResult = handler.requestType.paramsSerializer.deserializeWithContext(
+			request.params,
+			DefaultDeserializeContext
 		);
-		if (decodeResult.isLeft()) {
-			const message = `Got invalid params: ${decodeResult.value
-				.map(e => e.message)
-				.join(", ")}.`;
+		if (!decodeResult.isOk) {
+			const message = `Got invalid params: ${decodeResult.formatError()}`;
 
 			if (this.logger) {
 				this.logger.debug({
 					text: message,
 					data: {
 						requestObject: request,
-						errors: decodeResult.value,
+						errors: decodeResult.errors,
 					},
 				});
 			}
@@ -212,19 +177,23 @@ export class TypedChannel {
 					code: ErrorCode.invalidParams,
 					message,
 					data: {
-						errors: decodeResult.value.map(e => e.message || null),
+						errors: decodeResult.errors.map(e => e.message || null),
 					},
 				},
 			};
-		} else if (decodeResult.isRight()) {
+		} else {
 			const args = decodeResult.value;
 			let response: ResponseObject;
 			try {
 				const result = await handler.handler(args, requestId);
 				if ("error" in result || "errorMessage" in result) {
-					const errorData = handler.requestType.errorType.encode(
-						result.error
-					);
+					const errorData = result.error
+						? handler.requestType.errorSerializer.serializeWithContext(
+								result.error,
+								DefaultSerializeContext
+						  )
+						: undefined;
+
 					const code =
 						result.errorCode || ErrorCode.genericApplicationError;
 					const message =
@@ -237,8 +206,9 @@ export class TypedChannel {
 						},
 					};
 				} else {
-					const val = handler.requestType.resultType.encode(
-						result.ok
+					const val = handler.requestType.resultSerializer.serializeWithContext(
+						result.ok,
+						DefaultSerializeContext
 					);
 					response = { result: val };
 				}
@@ -261,8 +231,6 @@ export class TypedChannel {
 				};
 			}
 			return response;
-		} else {
-			throw new Error("Impossible");
 		}
 	}
 
@@ -286,9 +254,7 @@ export class TypedChannel {
 		if (handler.kind != "notification") {
 			if (this.logger) {
 				this.logger.debug({
-					text: `"${
-						request.method
-					}" is registered as request, but was sent as notification.`,
+					text: `"${request.method}" is registered as request, but was sent as notification.`,
 					data: { requestObject: request },
 				});
 			}
@@ -297,18 +263,17 @@ export class TypedChannel {
 			return;
 		}
 
-		const decodeResult = handler.notificationType.paramType.decode(
-			request.params
+		const decodeResult = handler.notificationType.paramsSerializer.deserializeWithContext(
+			request.params,
+			DefaultDeserializeContext
 		);
-		if (decodeResult.isLeft()) {
+		if (!decodeResult.isOk) {
 			if (this.logger) {
 				this.logger.debug({
-					text: `Got invalid params: ${decodeResult.value
-						.map(e => e.message)
-						.join(", ")}.`,
+					text: `Got invalid params: ${decodeResult.formatError()}`,
 					data: {
 						requestObject: request,
-						errors: decodeResult.value,
+						errors: decodeResult.errors,
 					},
 				});
 			}
@@ -348,9 +313,7 @@ export class TypedChannel {
 		const registeredHandler = this.handler.get(requestType.method);
 		if (registeredHandler) {
 			throw new Error(
-				`Handler with method "${
-					requestType.method
-				}" already registered.`
+				`Handler with method "${requestType.method}" already registered.`
 			);
 		}
 
@@ -376,16 +339,12 @@ export class TypedChannel {
 		} else {
 			if (registeredHandler.kind !== "notification") {
 				throw new Error(
-					`Method "${
-						type.method
-					}" was already registered as request handler.`
+					`Method "${type.method}" was already registered as request handler.`
 				);
 			}
 			if (registeredHandler.notificationType !== type) {
 				throw new Error(
-					`Method "${
-						type.method
-					}" was registered for a different type.`
+					`Method "${type.method}" was registered for a different type.`
 				);
 			}
 		}
@@ -413,7 +372,10 @@ export class TypedChannel {
 			throw new Error("Impossible");
 		}
 
-		let params = requestType.paramType.encode(args);
+		const params = requestType.paramsSerializer.serializeWithContext(
+			args,
+			DefaultSerializeContext
+		);
 
 		const response = await this.channel.sendRequest({
 			method: requestType.method,
@@ -428,9 +390,12 @@ export class TypedChannel {
 			);
 			throw e;
 		} else {
-			const result = requestType.resultType.decode(response.result);
-			if (result.isLeft()) {
-				throw new Error(result.value.map(e => e.message).join(", "));
+			const result = requestType.resultSerializer.deserializeWithContext(
+				response.result,
+				DefaultDeserializeContext
+			);
+			if (!result.isOk) {
+				throw new Error(result.formatError());
 			} else {
 				return result.value;
 			}
@@ -445,7 +410,10 @@ export class TypedChannel {
 			throw "";
 		}
 
-		let encodedParams = notificationType.paramType.encode(params);
+		const encodedParams = notificationType.paramsSerializer.serializeWithContext(
+			params,
+			DefaultSerializeContext
+		);
 		this.channel.sendNotification({
 			method: notificationType.method,
 			params: encodedParams,
@@ -455,6 +423,43 @@ export class TypedChannel {
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {
 
     }*/
+}
+
+export type Result<TOk, TError> = OkResult<TOk> | ErrorResult<TError>;
+
+export interface OkResult<TOk> {
+	ok: TOk;
+}
+
+export type ErrorResult<TError> =
+	| {
+			error: TError;
+			errorMessage?: string;
+			errorCode?: ErrorCode;
+	  }
+	| {
+			error?: TError;
+			errorMessage: string;
+			errorCode?: ErrorCode;
+	  };
+
+export type RequestHandlerFunc<TArg, TResult, TError> = (
+	arg: TArg,
+	requestId: RequestId
+) => Promise<Result<TResult, TError>>;
+
+export type NotificationHandlerFunc<TArg> = (arg: TArg) => void;
+
+interface RegisteredRequestHandler<TArg = any, TResult = any, TError = any> {
+	readonly kind: "request";
+	readonly requestType: RequestType<TArg, TResult, TError>;
+	readonly handler: RequestHandlerFunc<TArg, TResult, TError>;
+}
+
+interface RegisteredNotificationHandler<TArg = any> {
+	readonly kind: "notification";
+	readonly notificationType: NotificationType<TArg>;
+	readonly handlers: Set<NotificationHandlerFunc<TArg>>;
 }
 
 /**
@@ -478,15 +483,18 @@ export class RequestType<
 	TParams = unknown,
 	TResponse = unknown,
 	TError = unknown,
-	TMethod = string
+	TMethod extends string | undefined = string
 > {
 	public readonly kind: "request" = "request";
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramType: RuntimeJsonTypeArrOrObj<TParams>,
-		public readonly resultType: RuntimeJsonType<TResponse>,
-		public readonly errorType: RuntimeJsonType<TError>
+		public readonly paramsSerializer: Serializer<
+			TParams,
+			JSONObject | JSONArray | null
+		>,
+		public readonly resultSerializer: Serializer<TResponse>,
+		public readonly errorSerializer: Serializer<TError>
 	) {}
 
 	public withMethod(
@@ -494,9 +502,9 @@ export class RequestType<
 	): RequestType<TParams, TResponse, TError, string> {
 		return new RequestType(
 			method,
-			this.paramType,
-			this.resultType,
-			this.errorType
+			this.paramsSerializer,
+			this.resultSerializer,
+			this.errorSerializer
 		);
 	}
 }
@@ -509,43 +517,15 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramType: RuntimeJsonTypeArrOrObj<TParams>
+		public readonly paramsSerializer: Serializer<
+			TParams,
+			JSONObject | JSONArray | null
+		>
 	) {}
 
 	public withMethod(method: string): NotificationType<TParams, string> {
-		return new NotificationType(method, this.paramType);
+		return new NotificationType(method, this.paramsSerializer);
 	}
-}
-
-export const voidType = new t.Type<void, JSONValue, any>(
-	"void",
-	(u: unknown): u is void => u === undefined,
-	(i: unknown, context: t.Context) => {
-		if (i === null) {
-			return t.success(undefined);
-		}
-		return t.failure(i, context, "Given value is not 'null'.");
-	},
-	(_u: void) => null
-);
-
-/**
- * Describes a request type.
- */
-export function request<
-	TParams extends RuntimeJsonTypeArrOrObj<any> = RuntimeJsonTypeArrOrObj<{}>,
-	TResult extends RuntimeJsonType<any> = RuntimeJsonType<void>,
-	TError extends RuntimeJsonType<any> = RuntimeJsonType<undefined>
->(
-	method: string,
-	request: { params?: TParams; result?: TResult; error?: TError }
-): RequestType<TParams["_A"], TResult["_A"], TError["_A"]> {
-	return new RequestType(
-		method,
-		request.params ? request.params : t.type({}),
-		request.error ? request.error : voidType,
-		request.result ? request.result : voidType
-	);
 }
 
 /**
@@ -554,19 +534,55 @@ export function request<
 export function rawNotification(
 	method: string
 ): NotificationType<JSONObject | JSONArray | undefined> {
-	return new NotificationType(method, t.any);
+	return new NotificationType(method, sAny);
 }
 
 /**
- * Describes a notification type.
+ * Describes a request type as part of a `Contract`.
  */
-export function notification<TParams extends RuntimeJsonTypeArrOrObj<{}>>(
-	method: string,
-	notification: { params?: TParams }
-): NotificationType<TParams["_A"]> {
+export function requestType<
+	TMethod extends string | undefined = undefined,
+	TParams extends Serializer<any, JSONObject | JSONArray | null> = Serializer<
+		{},
+		JSONObject | JSONArray | null
+	>,
+	TResult extends Serializer<any> = Serializer<void>,
+	TError extends Serializer<any> = Serializer<undefined>
+>(request: {
+	method?: TMethod;
+	params?: TParams;
+	result?: TResult;
+	error?: TError;
+}): RequestType<
+	TParams["TValue"],
+	TResult["TValue"],
+	TError["TValue"],
+	TMethod
+> {
+	return new RequestType(
+		request.method!,
+		request.params ? request.params : sObject({}),
+		request.result ? request.result : sVoid,
+		request.error ? request.error : sVoid
+	);
+}
+
+/**
+ * Describes a notification type as part of a `Contract`.
+ */
+export function notificationType<
+	TMethod extends string | undefined = undefined,
+	TParams extends Serializer<any, JSONObject | JSONArray | null> = Serializer<
+		{},
+		JSONObject | JSONArray | null
+	>
+>(notification: {
+	method?: TMethod;
+	params?: TParams;
+}): NotificationType<TParams["TValue"], TMethod> {
 	return new NotificationType(
-		method,
-		notification.params ? notification.params : t.type({})
+		notification.method!,
+		notification.params ? notification.params : sObject({})
 	);
 }
 

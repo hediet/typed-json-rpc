@@ -723,15 +723,10 @@
     lodash "^4.17.11"
     to-fast-properties "^2.0.0"
 
-"@hediet/std@^0.4.0":
-  version "0.4.0"
-  resolved "https://registry.yarnpkg.com/@hediet/std/-/std-0.4.0.tgz#95dfd6e9d62f8bf9d91f3925d37b7b359b2af047"
-  integrity sha512-2kw4vSOprLchTjhcg8qQo6fdbBxJicSUrzZXgL0KzgMv18hjVmpm57NPLCPfI6115kAaMIWvMnlHFLYbx7poQQ==
-  dependencies:
-    "@types/chai" "^4.1.7"
-    "@types/sinon" "^7.0.10"
-    chai "^4.2.0"
-    sinon "^7.2.7"
+"@hediet/semantic-json@0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@hediet/semantic-json/-/semantic-json-0.1.0.tgz#ca3831778f1e59e555d0112decd5fe598437fdd3"
+  integrity sha512-lNdXabUmyxXnysXadTKyiKK9ik5L8b9SXu/QshgvE271QObPtp2Ubmh+rLNNCEAO65DE2VAxcesWmRKYfaQSJg==
 
 "@hediet/std@^0.6.0":
   version "0.6.0"
@@ -743,33 +738,6 @@
     chai "^4.2.0"
     mobx "^5.10.0"
     sinon "^7.2.7"
-
-"@hediet/typed-json-rpc-websocket-server@^0.6.0":
-  version "0.6.0"
-  resolved "https://registry.yarnpkg.com/@hediet/typed-json-rpc-websocket-server/-/typed-json-rpc-websocket-server-0.6.0.tgz#ad331cf394e7c3fbdfe054f11346186c360ee2d9"
-  integrity sha512-GHNFtAEpfagVblul4Xu/2GeTSqNDdtXP4fIiDG4cZ2ZWAcOeby5dYc66KA8OjJmr7MtfG20Ck9bAao9b91LzDQ==
-  dependencies:
-    "@hediet/std" "^0.4.0"
-    "@hediet/typed-json-rpc" "^0.6.0"
-    "@types/ws" "^6.0.1"
-    ws "^6.2.0"
-
-"@hediet/typed-json-rpc-websocket@^0.6.0":
-  version "0.6.0"
-  resolved "https://registry.yarnpkg.com/@hediet/typed-json-rpc-websocket/-/typed-json-rpc-websocket-0.6.0.tgz#983ad6a93d5903ccb91f49a064062d6a17b5f5a6"
-  integrity sha512-ght0igzJAbHZlnvnfHTvf5yy/Dh3ja+DCK/k8cwP1g4SMFCAPb529ymgH4ZGVRBWfxzRNxloQ3ysjN4CBxwUlg==
-  dependencies:
-    "@hediet/typed-json-rpc" "^0.6.0"
-    "@types/ws" "^6.0.1"
-    isomorphic-ws "^4.0.1"
-
-"@hediet/typed-json-rpc@^0.6.0":
-  version "0.6.1"
-  resolved "https://registry.yarnpkg.com/@hediet/typed-json-rpc/-/typed-json-rpc-0.6.1.tgz#08006f35245abbb85d057b0b830746179b640101"
-  integrity sha512-Co6CqMXDtpTJBRESa1mtJ0uizr/mR1UtBh3e1SF3/Aab5YicGjrmYl2FIZ3QU6Ys5F9pCdTK+62FW4zVpqguXA==
-  dependencies:
-    "@hediet/std" "^0.4.0"
-    io-ts "^1.8.3"
 
 "@iarna/toml@^2.2.0":
   version "2.2.3"
@@ -2556,11 +2524,6 @@ form-data@~2.3.2:
     combined-stream "^1.0.6"
     mime-types "^2.1.12"
 
-fp-ts@^1.0.0:
-  version "1.14.4"
-  resolved "https://registry.yarnpkg.com/fp-ts/-/fp-ts-1.14.4.tgz#df431e1bfe590f23ad418ca8c889880106a5008f"
-  integrity sha512-A20kqVBpV/VOpDmEDudb+FP/qOV+V/yEqHQQfHPHLHeX3alFM0JjX1cXNcU8+p8z5yeCkHFolKo7uJMRwUSMFA==
-
 fragment-cache@^0.2.1:
   version "0.2.1"
   resolved "https://registry.yarnpkg.com/fragment-cache/-/fragment-cache-0.2.1.tgz#4290fad27f13e89be7f33799c6bc5a0abfff0d19"
@@ -3006,20 +2969,6 @@ invert-kv@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/invert-kv/-/invert-kv-2.0.0.tgz#7393f5afa59ec9ff5f67a27620d11c226e3eec02"
   integrity sha512-wPVv/y/QQ/Uiirj/vh3oP+1Ww+AWehmi1g5fFWGPF6IpCBCDVrhgHRMvrLfdYcwDh3QJbGXDW4JAuzxElLSqKA==
-
-io-ts@^1.8.3:
-  version "1.8.3"
-  resolved "https://registry.yarnpkg.com/io-ts/-/io-ts-1.8.3.tgz#b617159ad030b5c85e14192ffbf24dd054030b38"
-  integrity sha512-zrZRpGNqbuMu8LWJ7lNNQpgdjIiOsNsIfzk8CJpeuVmdnNExGBpb5Wwtp+G9gmMOzLqj4+iFA7+HiFGLzqgBFQ==
-  dependencies:
-    fp-ts "^1.0.0"
-
-io-ts@^1.8.6:
-  version "1.8.6"
-  resolved "https://registry.yarnpkg.com/io-ts/-/io-ts-1.8.6.tgz#43930e025b88bbb317cb193bd9af784322a6fed6"
-  integrity sha512-0V0gbEfW5FnlEL++hO+j1cbxSvhH3f/i5Puz5AjmN6Q071vJONWTuOHttMSe60gi4DBHBTd2eHbSnHv37ptTnQ==
-  dependencies:
-    fp-ts "^1.0.0"
 
 is-absolute-url@^2.0.0:
   version "2.1.0"
@@ -6247,13 +6196,6 @@ ws@^5.1.1, ws@^5.2.0:
   version "5.2.2"
   resolved "https://registry.yarnpkg.com/ws/-/ws-5.2.2.tgz#dffef14866b8e8dc9133582514d1befaf96e980f"
   integrity sha512-jaHFD6PFv6UgoIVda6qZllptQsMlDEJkTQcybzzXDYM1XO9Y8em691FGMPmM46WGyLU4z9KMgQN+qrux/nhlHA==
-  dependencies:
-    async-limiter "~1.0.0"
-
-ws@^6.2.0:
-  version "6.2.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-6.2.0.tgz#13806d9913b2a5f3cbb9ba47b563c002cbc7c526"
-  integrity sha512-deZYUNlt2O4buFCa3t5bKLf8A7FPP/TVjwOeVNpw818Ma5nk4MLXls2eoEGS39o8119QIYxTrTDoPQ5B/gTD6w==
   dependencies:
     async-limiter "~1.0.0"
 

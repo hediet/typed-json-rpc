@@ -2,7 +2,7 @@ import {
 	contract,
 	requestContract,
 	notificationContract,
-} from "@hediet/typed-json-rpc";
+} from "@hediet/json-rpc";
 import * as t from "io-ts";
 
 /*

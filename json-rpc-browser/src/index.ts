@@ -1,4 +1,4 @@
-import { BaseMessageStream, Message } from "@hediet/typed-json-rpc";
+import { BaseMessageStream, Message } from "@hediet/json-rpc";
 
 interface WindowLike {
 	postMessage(data: any, ...misc: any[]): void;

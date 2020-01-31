@@ -1,13 +1,13 @@
 import {
 	connectToWorker,
 	workerConnectToParent,
-} from "@hediet/typed-json-rpc-browser";
+} from "@hediet/json-rpc-browser";
 import {
 	contract,
 	requestContract,
 	notificationContract,
 	ConsoleRpcLogger,
-} from "@hediet/typed-json-rpc";
+} from "@hediet/json-rpc";
 import { string, type, number } from "io-ts";
 
 const api = contract({

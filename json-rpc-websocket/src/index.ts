@@ -1,4 +1,4 @@
-import { Message, BaseMessageStream } from "@hediet/typed-json-rpc";
+import { Message, BaseMessageStream } from "@hediet/json-rpc";
 import WebSocket = require("isomorphic-ws");
 
 export type NormalizedWebSocketOptions = {
