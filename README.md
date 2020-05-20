@@ -58,29 +58,29 @@ Servers and clients are handled symmetrically.
 
 ```ts
 import {
-	types as t,
+	semanticJson as s,
 	contract,
-	requestContract,
-	notificationContract,
+	requestType,
+	notificationType,
 } from "@hediet/json-rpc";
 
 const myRpcContract = contract({
 	// the interface for clients to interact with servers
 	server: {
-		calculate: requestContract({
+		calculate: requestType({
 			// io-ts is used to specify types.
 			// This might change in future major versions.
-			params: t.type({
-				data: t.string,
+			params: s.sObject({
+				data: s.sString(),
 			}),
-			result: t.string,
+			result: s.sString(),
 		}),
 	},
 	// the interface for servers to interact with clients
 	client: {
-		progress: notificationContract({
-			params: t.type({
-				progress: t.number,
+		progress: notificationType({
+			params: s.sObject({
+				progress: s.sNumber(),
 			}),
 		}),
 	},
@@ -92,12 +92,14 @@ const myRpcContract = contract({
 Server:
 
 ```ts
+import { Contract, ConsoleRpcLogger } from "@hediet/json-rpc";
 import { startWebSocketServer } from "@hediet/json-rpc-websocket-server";
 
 const clients = new Set<typeof myRpcContract.TClientInterface>();
 startWebSocketServer({ port: 12345 }, async (stream) => {
 	// `stream` provides methods to send and receive messages
-	const { client } = myRpcContract.registerServerToStream(
+	const { client } = Contract.registerServerToStream(
+		myRpcContract,
 		stream,
 		// You can specify a logger to make debugging easier.
 		new ConsoleRpcLogger(),
@@ -105,7 +107,7 @@ startWebSocketServer({ port: 12345 }, async (stream) => {
 			calculate: async ({ data }) => {
 				// call the client
 				await client.progress({ progress: 0.5 });
-				return { result: data };
+				return data;
 			},
 		}
 	);
@@ -118,9 +120,11 @@ startWebSocketServer({ port: 12345 }, async (stream) => {
 Client:
 
 ```ts
+import { Contract, ConsoleRpcLogger } from "@hediet/json-rpc";
 import { WebSocketStream } from "@hediet/json-rpc-websocket";
 
-const { server } = myRpcContract.getServerFromStream(
+const { server } = Contract.getServerFromStream(
+	myRpcContract,
 	await WebSocketStream.connectTo({ address: "ws://localhost:12345" }),
 	new ConsoleRpcLogger(),
 	{
@@ -135,11 +139,12 @@ const result = await server.calculate({ data: "some data" });
 Main process:
 
 ```ts
+import { Contract } from "@hediet/json-rpc";
 import { NodeJsMessageStream } from "@hediet/json-rpc-streams";
 
 const proc = spawn("node", [join(__dirname, "echo-process")]);
-const stream = ;
-const { server } = myRpcContract.getServerFromStream(
+const { server } = Contract.getServerFromStream(
+	myRpcContract,
 	NodeJsMessageStream.connectToProcess(proc),
 	logger,
 	{
@@ -152,15 +157,17 @@ const result = await server.calculate({ data: "some data" });
 Child process:
 
 ```ts
+import { Contract } from "@hediet/json-rpc";
 import { NodeJsMessageStream } from "@hediet/json-rpc-streams";
 
-const { server } = myRpcContract.getServerFromStream(
+const { server } = Contract.getServerFromStream(
+	myRpcContract,
 	NodeJsMessageStream.connectToThisProcess(),
 	logger,
 	{
 		calculate: async ({ data }) => {
 			await client.progress({ progress: 0.5 });
-			return { result: data };
+			return data;
 		},
 	}
 );
@@ -171,13 +178,12 @@ const { server } = myRpcContract.getServerFromStream(
 Main window:
 
 ```ts
-import {
-	connectToWorker
-} from "@hediet/json-rpc-browser";
+import { Contract } from "@hediet/json-rpc";
+import { connectToWorker } from "@hediet/json-rpc-browser";
 
 const worker = new Worker("./browser-worker.ts");
-const stream = ;
-const { server } = myRpcContract.getServerFromStream(
+const { server } = Contract.getServerFromStream(
+	myRpcContract,
 	connectToWorker(worker),
 	logger,
 	{
@@ -190,15 +196,17 @@ const result = await server.calculate({ data: "some data" });
 Web-Worker:
 
 ```ts
+import { Contract } from "@hediet/json-rpc";
 import { workerConnectToParent } from "@hediet/json-rpc-browser";
 
-const { server } = myRpcContract.getServerFromStream(
+const { server } = Contract.getServerFromStream(
+	myRpcContract,
 	workerConnectToParent(),
 	logger,
 	{
 		calculate: async ({ data }) => {
 			await client.progress({ progress: 0.5 });
-			return { result: data };
+			return data;
 		},
 	}
 );
