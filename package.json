@@ -6,6 +6,7 @@
 		"json-rpc-websocket-server",
 		"json-rpc-streams",
 		"json-rpc-browser",
+		"json-rpc-gui",
 		"demo"
 	]
 }

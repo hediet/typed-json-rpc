@@ -1,5 +1,7 @@
 import * as semanticJson from "@hediet/semantic-json";
 
+// These types model the JSON RPC 2.0 Specification (see https://www.jsonrpc.org/specification).
+
 export function isRequestOrNotification(msg: Message): msg is RequestMessage {
 	return (msg as any).method !== undefined;
 }

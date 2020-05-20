@@ -13,11 +13,17 @@ describe("NodeJsMessageStream", () => {
 		stream.setReadCallback(msg => {
 			messages.push(msg);
 		});
-		const msg = { method: "ping", params: { foo: 1 } };
+		const msg = {
+			jsonrpc: "2.0" as const,
+			method: "ping",
+			params: { foo: 1 },
+		};
 		await stream.write(msg);
 		await wait(200);
 		proc.kill();
 
-		deepEqual(messages, [{ method: "pong", params: { payload: msg } }]);
+		deepEqual(messages, [
+			{ jsonrpc: "2.0", method: "pong", params: { payload: msg } },
+		]);
 	});
 });

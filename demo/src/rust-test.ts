@@ -1,7 +1,7 @@
 import {
 	semanticJson as s,
 	contract,
-	requestContract,
+	requestType,
 	ConsoleRpcLogger,
 	Contract,
 } from "@hediet/json-rpc";
@@ -9,10 +9,11 @@ import { NodeJsMessageStream } from "@hediet/json-rpc-streams";
 import { spawn, exec } from "child_process";
 
 const c = contract({
+	name: "c",
 	server: {
-		query_packages: requestContract({
-			params: s.sArray(s.sString),
-			result: s.sArray(s.sString),
+		query_packages: requestType({
+			params: s.sArrayOf(s.sString()),
+			result: s.sArrayOf(s.sString()),
 		}),
 	},
 	client: {},
@@ -25,10 +26,10 @@ async function main() {
 		cwd: "S:\\dev\\2019\\vscode\\vscode-npm-support\\rust-test\\",
 	});
 
-	p.on("error", e => console.error(e));
-	p.on("message", m => console.log(m));
-	p.stdout.on("data", d => console.log(d));
-	p.stderr.on("data", d => console.log(d.toString()));
+	p.on("error", (e) => console.error(e));
+	p.on("message", (m) => console.log(m));
+	p.stdout!.on("data", (d) => console.log(d));
+	p.stderr!.on("data", (d) => console.log(d.toString()));
 
 	const { server } = Contract.getServerFromStream(
 		c,

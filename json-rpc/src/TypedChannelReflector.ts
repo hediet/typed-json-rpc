@@ -1,7 +1,7 @@
-import { contract } from "./TypedChannelContracts";
+/*import { contract } from "./TypedChannelContracts";
 import { TypedChannel, requestType } from "./TypedChannel";
 import {
-	sArray,
+	sArrayOf,
 	sObject,
 	sString,
 	sTypePackage,
@@ -33,15 +33,15 @@ export const reflectContract = contract({
 		supportedVersions: requestType({
 			method: "reflector/supported-versions",
 			result: sObject({
-				versions: sArray(sNumber),
+				versions: sArrayOf(sNumber),
 			}),
 		}),
 		list: requestType({
 			method:
 				"reflector/v1/list-registered-request-and-notification-types",
 			result: sObject({
-				methods: sArray(sNotificationOrRequest),
-				typePackages: sArray(sTypePackage),
+				methods: sArrayOf(sNotificationOrRequest),
+				typePackages: sArrayOf(sTypePackage),
 			}),
 		}),
 	},
@@ -50,14 +50,14 @@ export const reflectContract = contract({
 
 export function registerReflector(channel: TypedChannel) {
 	reflectContract.registerServer(channel, {
-		supportedVersions: async args => {
+		supportedVersions: async (args) => {
 			return { versions: [1] };
 		},
-		list: async args => {
+		list: async (args) => {
 			const ts = new TypeSystem();
 			const methods = channel
 				.getRegisteredTypes()
-				.map<typeof sNotificationOrRequest["TValue"]>(t => {
+				.map<typeof sNotificationOrRequest["T"]>((t) => {
 					const paramsType = t.paramsSerializer.getType(ts);
 					if (t.kind === "notification") {
 						return {
@@ -86,3 +86,6 @@ export function registerReflector(channel: TypedChannel) {
 		},
 	});
 }
+*/
+
+export const x = 1;

@@ -18,11 +18,12 @@ const chatContract = contract({
 	name: "ChatContract",
 	server: {
 		sendMessage: requestType({
-			params: s.sArray(s.sString).refine<{ msg: string }>({
+			params: s.sTuple().addItem("msg", s.sString),
+			/*params: s.sArray(s.sString).refine<{ msg: string }>({
 				canSerialize: (obj): obj is { msg: string } => true,
 				deserialize: o => s.deserializationValue({ msg: o[0] }),
 				serialize: o => [o.msg],
-			}),
+			}),*/
 		}),
 		ping: requestType({}),
 	},
@@ -36,33 +37,39 @@ const chatContract = contract({
 const clients = new Set<typeof chatContract.TClientInterface>();
 const logger = new ConsoleRpcLogger();
 
-startWebSocketServer({ listenOn: { port: "random" } }, async stream => {
-	const { client, channel } = Contract.registerServerToStream(
-		chatContract,
-		stream,
-		logger,
-		{
-			sendMessage: async args => {
-				console.log(args.msg);
-				for (const c of clients) {
-					c.onNewMessage({ msg: args.msg });
-				}
-			},
-			ping: async ({}) => {},
-		}
-	);
+const srvr = startWebSocketServer(
+	{ listenOn: { port: "random" } },
+	async stream => {
+		const { client, channel } = Contract.registerServerToStream(
+			chatContract,
+			stream,
+			logger,
+			{
+				sendMessage: async args => {
+					console.log(args.msg);
+					for (const c of clients) {
+						c.onNewMessage({ msg: args.msg });
+					}
+				},
+				ping: async ({}) => {},
+			}
+		);
 
-	registerReflector(channel);
-	clients.add(client);
-	await stream.onClosed;
-	clients.delete(client);
-});
+		registerReflector(channel);
+		clients.add(client);
+		await stream.onClosed;
+		clients.delete(client);
+	}
+);
 
 async function main() {
 	const { server, channel } = Contract.getServerFromStream(
 		chatContract,
 		new ConsoleStreamLogger(
-			await WebSocketStream.connectTo({ address: "ws://localhost:12345" })
+			await WebSocketStream.connectTo({
+				host: "localhost",
+				port: srvr.port,
+			})
 		),
 		logger,
 		{
@@ -72,11 +79,15 @@ async function main() {
 
 	const { server: rs } = reflectContract.getServer(channel, {});
 
-	require("C:\\Users\\henni\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\easy-attach\\")();
 	const data = await rs.list();
 	console.log(data);
+
 	server.sendMessage({ msg: "Hello world" });
 	server.ping();
 }
 
-main();
+setInterval(() => {
+	console.log("step");
+}, 1000);
+
+main().catch(e => console.error(e));

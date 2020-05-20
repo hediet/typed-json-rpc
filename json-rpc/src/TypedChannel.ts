@@ -1,12 +1,9 @@
 import {
 	Serializer,
-	BaseSerializer,
-	sObject,
-	DefaultSerializeContext,
-	SerializeContext,
 	sAny,
+	sObject,
 	sVoid,
-	DefaultDeserializeContext,
+	BaseSerializer,
 } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import {
@@ -91,7 +88,7 @@ export class TypedChannel {
 		}
 		this.channel = this.channelCtor.createChannel({
 			handleRequest: (req, id) => this.handleRequest(req, id),
-			handleNotification: req => this.handleNotification(req),
+			handleNotification: (req) => this.handleNotification(req),
 		});
 
 		this.listeningDeferred.resolve();
@@ -155,11 +152,10 @@ export class TypedChannel {
 			};
 		}
 
-		const decodeResult = handler.requestType.paramsSerializer.deserializeWithContext(
-			request.params,
-			DefaultDeserializeContext
+		const decodeResult = handler.requestType.paramsSerializer.deserialize(
+			request.params
 		);
-		if (!decodeResult.isOk) {
+		if (decodeResult.hasErrors) {
 			const message = `Got invalid params: ${decodeResult.formatError()}`;
 
 			if (this.logger) {
@@ -177,7 +173,9 @@ export class TypedChannel {
 					code: ErrorCode.invalidParams,
 					message,
 					data: {
-						errors: decodeResult.errors.map(e => e.message || null),
+						errors: decodeResult.errors.map(
+							(e) => e.message || null
+						),
 					},
 				},
 			};
@@ -188,9 +186,8 @@ export class TypedChannel {
 				const result = await handler.handler(args, requestId);
 				if ("error" in result || "errorMessage" in result) {
 					const errorData = result.error
-						? handler.requestType.errorSerializer.serializeWithContext(
-								result.error,
-								DefaultSerializeContext
+						? handler.requestType.errorSerializer.serialize(
+								result.error
 						  )
 						: undefined;
 
@@ -206,9 +203,8 @@ export class TypedChannel {
 						},
 					};
 				} else {
-					const val = handler.requestType.resultSerializer.serializeWithContext(
-						result.ok,
-						DefaultSerializeContext
+					const val = handler.requestType.resultSerializer.serialize(
+						result.ok
 					);
 					response = { result: val };
 				}
@@ -263,11 +259,10 @@ export class TypedChannel {
 			return;
 		}
 
-		const decodeResult = handler.notificationType.paramsSerializer.deserializeWithContext(
-			request.params,
-			DefaultDeserializeContext
+		const decodeResult = handler.notificationType.paramsSerializer.deserialize(
+			request.params
 		);
-		if (!decodeResult.isOk) {
+		if (decodeResult.hasErrors) {
 			if (this.logger) {
 				this.logger.debug({
 					text: `Got invalid params: ${decodeResult.formatError()}`,
@@ -372,10 +367,9 @@ export class TypedChannel {
 			throw new Error("Impossible");
 		}
 
-		const params = requestType.paramsSerializer.serializeWithContext(
-			args,
-			DefaultSerializeContext
-		);
+		const params = requestType.paramsSerializer.serialize(args);
+
+		assertObjectArrayOrNull(params);
 
 		const response = await this.channel.sendRequest({
 			method: requestType.method,
@@ -390,11 +384,10 @@ export class TypedChannel {
 			);
 			throw e;
 		} else {
-			const result = requestType.resultSerializer.deserializeWithContext(
-				response.result,
-				DefaultDeserializeContext
+			const result = requestType.resultSerializer.deserialize(
+				response.result
 			);
-			if (!result.isOk) {
+			if (result.hasErrors) {
 				throw new Error(result.formatError());
 			} else {
 				return result.value;
@@ -410,10 +403,12 @@ export class TypedChannel {
 			throw "";
 		}
 
-		const encodedParams = notificationType.paramsSerializer.serializeWithContext(
-			params,
-			DefaultSerializeContext
+		const encodedParams = notificationType.paramsSerializer.serialize(
+			params
 		);
+
+		assertObjectArrayOrNull(encodedParams);
+
 		this.channel.sendNotification({
 			method: notificationType.method,
 			params: encodedParams,
@@ -423,6 +418,16 @@ export class TypedChannel {
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {
 
     }*/
+}
+
+function assertObjectArrayOrNull(
+	val: JSONValue
+): asserts val is JSONObject | JSONArray | null {
+	if (val !== null && Array.isArray(val) && typeof val !== "object") {
+		throw new Error(
+			"Invalid value! Only null, array and object is allowed."
+		);
+	}
 }
 
 export type Result<TOk, TError> = OkResult<TOk> | ErrorResult<TError>;
@@ -489,12 +494,9 @@ export class RequestType<
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramsSerializer: Serializer<
-			TParams,
-			JSONObject | JSONArray | null
-		>,
-		public readonly resultSerializer: Serializer<TResponse>,
-		public readonly errorSerializer: Serializer<TError>
+		public readonly paramsSerializer: BaseSerializer<TParams>,
+		public readonly resultSerializer: BaseSerializer<TResponse>,
+		public readonly errorSerializer: BaseSerializer<TError>
 	) {}
 
 	public withMethod(
@@ -517,10 +519,7 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramsSerializer: Serializer<
-			TParams,
-			JSONObject | JSONArray | null
-		>
+		public readonly paramsSerializer: Serializer<TParams>
 	) {}
 
 	public withMethod(method: string): NotificationType<TParams, string> {
@@ -534,7 +533,7 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 export function rawNotification(
 	method: string
 ): NotificationType<JSONObject | JSONArray | undefined> {
-	return new NotificationType(method, sAny);
+	return new NotificationType(method, sAny());
 }
 
 /**
@@ -542,10 +541,7 @@ export function rawNotification(
  */
 export function requestType<
 	TMethod extends string | undefined = undefined,
-	TParams extends Serializer<any, JSONObject | JSONArray | null> = Serializer<
-		{},
-		JSONObject | JSONArray | null
-	>,
+	TParams extends Serializer<any> = Serializer<{}>,
 	TResult extends Serializer<any> = Serializer<void>,
 	TError extends Serializer<any> = Serializer<undefined>
 >(request: {
@@ -553,17 +549,12 @@ export function requestType<
 	params?: TParams;
 	result?: TResult;
 	error?: TError;
-}): RequestType<
-	TParams["TValue"],
-	TResult["TValue"],
-	TError["TValue"],
-	TMethod
-> {
+}): RequestType<TParams["T"], TResult["T"], TError["T"], TMethod> {
 	return new RequestType(
 		request.method!,
 		request.params ? request.params : sObject({}),
-		request.result ? request.result : sVoid,
-		request.error ? request.error : sVoid
+		request.result ? request.result : sVoid(),
+		request.error ? request.error : sVoid()
 	);
 }
 
@@ -572,14 +563,11 @@ export function requestType<
  */
 export function notificationType<
 	TMethod extends string | undefined = undefined,
-	TParams extends Serializer<any, JSONObject | JSONArray | null> = Serializer<
-		{},
-		JSONObject | JSONArray | null
-	>
+	TParams extends Serializer<any> = Serializer<{}>
 >(notification: {
 	method?: TMethod;
 	params?: TParams;
-}): NotificationType<TParams["TValue"], TMethod> {
+}): NotificationType<TParams["T"], TMethod> {
 	return new NotificationType(
 		notification.method!,
 		notification.params ? notification.params : sObject({})

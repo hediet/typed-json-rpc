@@ -4,25 +4,27 @@ import {
 } from "@hediet/json-rpc-browser";
 import {
 	contract,
-	requestContract,
-	notificationContract,
 	ConsoleRpcLogger,
+	semanticJson,
+	requestType,
+	notificationType,
+	Contract,
 } from "@hediet/json-rpc";
-import { string, type, number } from "io-ts";
 
 const api = contract({
+	name: "API",
 	server: {
-		calculate: requestContract({
-			params: type({
-				name: string,
+		calculate: requestType({
+			params: semanticJson.sObject({
+				name: semanticJson.sString(),
 			}),
-			result: string,
+			result: semanticJson.sString(),
 		}),
 	},
 	client: {
-		progress: notificationContract({
-			params: type({
-				progress: number,
+		progress: notificationType({
+			params: semanticJson.sObject({
+				progress: semanticJson.sNumber(),
 			}),
 		}),
 	},
@@ -31,7 +33,8 @@ const api = contract({
 if (typeof window !== "undefined") {
 	// window:
 	const worker = new Worker("./browser-worker.ts");
-	const { server } = api.getServerFromStream(
+	const { server } = Contract.getServerFromStream(
+		api,
 		connectToWorker(worker),
 		new ConsoleRpcLogger(),
 		{
@@ -44,7 +47,8 @@ if (typeof window !== "undefined") {
 	server.calculate({ name: "foo" }).catch(console.error);
 } else {
 	// worker:
-	const { client, channel } = api.registerServerToStream(
+	const { client, channel } = Contract.registerServerToStream(
+		api,
 		workerConnectToParent(),
 		new ConsoleRpcLogger(),
 		{

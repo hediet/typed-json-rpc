@@ -6,22 +6,6 @@ import {
 	JSONObject,
 } from "./JsonRpcTypes";
 
-export interface RequestObject {
-	method: string;
-	// Compared to RequestMessage, params must be set, but can be null.
-	// This is designed so that null can be handled by the deserializer
-	// which undefined cannot.
-	params: JSONArray | JSONObject | null;
-}
-
-export type ResponseObject =
-	| {
-			result: JSONValue;
-	  }
-	| {
-			error: ErrorObject;
-	  };
-
 /**
  * A channel has methods to send requests and notifications.
  * A request expects a response, a notification does not.
@@ -31,8 +15,8 @@ export interface Channel {
 	 * Sends a request.
 	 * @param request - The request to send.
 	 * @param messageIdCallback - An optional callback that is called before sending the request.
-	 * 			The passed request id can be used to track the request.
-	 * @return A promise of the response. Fails if the request could not be delivered or if an response could not be received.
+	 *  		The passed request id can be used to track the request.
+	 * @return A promise of the response. Fails if the request could not be delivered or if a response could not be received.
 	 */
 	sendRequest(
 		request: RequestObject,
@@ -42,7 +26,7 @@ export interface Channel {
 	/**
 	 * Sends a notification.
 	 * @return A promise that is fulfilled as soon as the notification has been sent successfully.
-	 *      Fails if the notification could not be delivered.
+	 *  	Fails if the notification could not be sent.
 	 */
 	sendNotification(notification: RequestObject): Promise<void>;
 
@@ -53,7 +37,7 @@ export interface Channel {
 }
 
 /**
- * A request handler is an object that can handle requests and notifications.
+ * A request handler can handle requests and notifications.
  * Implementations must respond to all requests.
  */
 export interface RequestHandler {
@@ -66,6 +50,29 @@ export interface RequestHandler {
 	): Promise<ResponseObject>;
 	handleNotification(request: RequestObject): Promise<void>;
 }
+
+/**
+ * Represents a request.
+ * The `method` property should be used for deciding what to do with it.
+ */
+export interface RequestObject {
+	method: string;
+	// Compared to RequestMessage, params must be set, but can be null.
+	// This is designed so that null can be handled by the deserializer
+	// which undefined cannot.
+	params: JSONArray | JSONObject | null;
+}
+
+/**
+ * The result of a request.
+ */
+export type ResponseObject =
+	| {
+			result: JSONValue;
+	  }
+	| {
+			error: ErrorObject;
+	  };
 
 /**
  * A factory for `Channel`s.

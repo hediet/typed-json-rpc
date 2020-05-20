@@ -48,11 +48,11 @@ export type AsOneSideContract<T extends OneSideContract> = T;
 export type ContractToRequest<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? RequestType<
-				TRequestMap[TRequest]["paramsSerializer"]["TValue"],
-				TRequestMap[TRequest]["resultSerializer"]["TValue"],
-				TRequestMap[TRequest]["errorSerializer"]["TValue"]
+				TRequestMap[TRequest]["paramsSerializer"]["T"],
+				TRequestMap[TRequest]["resultSerializer"]["T"],
+				TRequestMap[TRequest]["errorSerializer"]["T"]
 		  >
-		: NotificationType<TRequestMap[TRequest]["paramsSerializer"]["TValue"]>;
+		: NotificationType<TRequestMap[TRequest]["paramsSerializer"]["T"]>;
 };
 
 export type EmptyObjectToVoid<T> = {} extends T ? void | T : T;
@@ -61,12 +61,12 @@ export type ContractInterfaceOf<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? (
 				arg: EmptyObjectToVoid<
-					TRequestMap[TRequest]["paramsSerializer"]["TValue"]
+					TRequestMap[TRequest]["paramsSerializer"]["T"]
 				>
-		  ) => Promise<TRequestMap[TRequest]["resultSerializer"]["TValue"]>
+		  ) => Promise<TRequestMap[TRequest]["resultSerializer"]["T"]>
 		: (
 				arg: EmptyObjectToVoid<
-					TRequestMap[TRequest]["paramsSerializer"]["TValue"]
+					TRequestMap[TRequest]["paramsSerializer"]["T"]
 				>
 		  ) => void;
 };
@@ -95,21 +95,21 @@ export type ContractHandlerOf<
 		TRequestMap
 	>]: TRequestMap[TKey] extends AnyRequestContract
 		? (
-				arg: TRequestMap[TKey]["paramsSerializer"]["TValue"],
+				arg: TRequestMap[TKey]["paramsSerializer"]["T"],
 				info: RequestHandlerInfo<
-					TRequestMap[TKey]["errorSerializer"]["TValue"],
+					TRequestMap[TKey]["errorSerializer"]["T"],
 					ContractInterfaceOf<TCounterPartRequestMap>,
 					TContext
 				>
 		  ) => Promise<
-				| TRequestMap[TKey]["resultSerializer"]["TValue"]
-				| ErrorWrapper<TRequestMap[TKey]["errorSerializer"]["TValue"]>
+				| TRequestMap[TKey]["resultSerializer"]["T"]
+				| ErrorWrapper<TRequestMap[TKey]["errorSerializer"]["T"]>
 		  >
 		: never; // cannot happen
 } &
 	{
 		[TKey in NotificationKeys<TRequestMap>]?: (
-			arg: TRequestMap[TKey]["paramsSerializer"]["TValue"],
+			arg: TRequestMap[TKey]["paramsSerializer"]["T"],
 			info: HandlerInfo<
 				ContractInterfaceOf<TCounterPartRequestMap>,
 				TContext
@@ -321,10 +321,13 @@ export abstract class AbstractContract<
 				const method = myInterface[key];
 				if (method) {
 					disposables.push(
-						typedChannel.registerNotificationHandler(req, args => {
-							// TODO maybe await and log errors?
-							method(args, notificationInfo);
-						})
+						typedChannel.registerNotificationHandler(
+							req,
+							(args) => {
+								// TODO maybe await and log errors?
+								method(args, notificationInfo);
+							}
+						)
 					);
 				}
 			}
