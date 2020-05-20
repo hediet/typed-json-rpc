@@ -1,5 +1,5 @@
 {
 	"plantuml.diagramsRoot": "docs",
-	"plantuml.exportFormat": "png",
+	"plantuml.exportFormat": "svg",
 	"plantuml.exportOutDir": "docs/exported"
 }

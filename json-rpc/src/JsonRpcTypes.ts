@@ -16,12 +16,13 @@ export type Message = RequestMessage | ResponseMessage;
  * Represents a request or a notification.
  */
 export interface RequestMessage {
-	/**  must not match `rpc\..*` */
 	jsonrpc: "2.0";
+	/**  must not match `rpc\..*` */
 	method: string;
 	params?: JSONArray | JSONObject;
-	/** Is not set if the request is a notification. */
+	/** Is not set if and only if the request is a notification. */
 	id?: RequestId;
+	/** Requests don't have a result. */
 	result?: never;
 }
 

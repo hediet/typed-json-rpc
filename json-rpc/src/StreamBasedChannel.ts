@@ -31,7 +31,7 @@ export class StreamBasedChannel implements Channel {
 	): ChannelFactory {
 		let constructed = false;
 		return {
-			createChannel: listener => {
+			createChannel: (listener) => {
 				if (constructed) {
 					throw new Error(
 						`A channel to the stream ${stream} was already constructed!`
@@ -48,14 +48,14 @@ export class StreamBasedChannel implements Channel {
 		string,
 		(response: ResponseMessage) => void
 	>();
-	private requestId = 0;
+	private lastUsedRequestId = 0;
 
 	constructor(
 		private readonly stream: MessageStream,
 		private readonly listener: RequestHandler | undefined,
 		private readonly logger: RpcLogger | undefined
 	) {
-		this.stream.setReadCallback(message => {
+		this.stream.setReadCallback((message) => {
 			if (isRequestOrNotification(message)) {
 				this.processRequestOrNotification(message);
 			} else {
@@ -64,7 +64,9 @@ export class StreamBasedChannel implements Channel {
 		});
 	}
 
-	private async processRequestOrNotification(message: RequestMessage) {
+	private async processRequestOrNotification(
+		message: RequestMessage
+	): Promise<void> {
 		if (message.id === undefined) {
 			if (!this.listener) {
 				if (this.logger) {
@@ -153,7 +155,7 @@ export class StreamBasedChannel implements Channel {
 		}
 	}
 
-	private processResponse(message: ResponseMessage) {
+	private processResponse(message: ResponseMessage): void {
 		const strId = "" + message.id;
 		const callback = this.unprocessedResponses.get(strId);
 		if (!callback) {
@@ -170,7 +172,7 @@ export class StreamBasedChannel implements Channel {
 	}
 
 	private newRequestId(): RequestId {
-		return this.requestId++;
+		return this.lastUsedRequestId++;
 	}
 
 	public sendRequest(
@@ -190,7 +192,7 @@ export class StreamBasedChannel implements Channel {
 
 		return new Promise<ResponseObject>((resolve, reject) => {
 			const strId = "" + message.id;
-			this.unprocessedResponses.set(strId, response => {
+			this.unprocessedResponses.set(strId, (response) => {
 				if ("result" in response) {
 					resolve({ result: response.result! });
 				} else {
@@ -205,7 +207,7 @@ export class StreamBasedChannel implements Channel {
 				}
 			});
 
-			this.stream.write(message).then(undefined, reason => {
+			this.stream.write(message).then(undefined, (reason) => {
 				// Assuming no response will ever be sent as sending failed.
 				this.unprocessedResponses.delete(strId);
 				reject(reason);

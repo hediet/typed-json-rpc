@@ -1,8 +1,10 @@
 import { Message } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
+import { Deferred } from "@hediet/std/synchronization";
 
 /**
- * No messages are lost when delaying reading with `read` or `setReadCallback`.
+ * Represents a bidirectional stream of messages.
+ * No messages are lost when delaying reading with `setReadCallback`.
  */
 export interface MessageStream {
 	/**
@@ -17,6 +19,7 @@ export interface MessageStream {
 
 	/**
 	 * Sets a callback for incoming messages.
+	 * Processes all yet unhandled and future incoming messages.
 	 */
 	setReadCallback(
 		callback: ((readMessage: Message) => void) | undefined
@@ -28,6 +31,10 @@ export interface MessageStream {
 	toString(): string;
 }
 
+/**
+ * Base class for implementing a MessageStream.
+ * Provides a unreadMessage queue.
+ */
 export abstract class BaseMessageStream implements MessageStream {
 	private static id = 0;
 
@@ -35,19 +42,27 @@ export abstract class BaseMessageStream implements MessageStream {
 	private onMessageCallback: ((readMessage: Message) => void) | undefined;
 	protected readonly id = BaseMessageStream.id++;
 
-	/**
-	 * Call this in derived classes to signal that the connection closed.
-	 */
-	protected readonly onConnectionClosed: () => void;
+	private readonly onClosedDeferred = new Deferred();
 
 	/**
-	 * Call this in derived classes to signal a new message.
+	 * Is resolved when the stream closed.
 	 */
-	protected onMessage(message: Message) {
-		const hasReadAllQueuedMessages = this.unreadMessages.length === 0;
-		if (hasReadAllQueuedMessages && this.onMessageCallback)
-			this.onMessageCallback(message);
-		else this.unreadMessages.push(message);
+	public readonly onClosed = this.onClosedDeferred.promise;
+
+	/**
+	 * Sets a callback for incoming messages.
+	 */
+	public setReadCallback(
+		callback: ((readMessage: Message) => void) | undefined
+	): void {
+		this.onMessageCallback = callback;
+
+		if (!callback) return;
+
+		while (this.unreadMessages.length > 0) {
+			const msg = this.unreadMessages.shift()!;
+			callback(msg);
+		}
 	}
 
 	/**
@@ -60,33 +75,23 @@ export abstract class BaseMessageStream implements MessageStream {
 	 */
 	public abstract toString(): string;
 
-	constructor() {
-		let onConnectionClosed: () => void;
-		this.onClosed = new Promise<void>(
-			resolve => (onConnectionClosed = resolve)
-		);
-		this.onConnectionClosed = onConnectionClosed!;
+	/**
+	 * Call this in derived classes to signal a new message.
+	 */
+	protected onMessage(message: Message): void {
+		const hasReadAllQueuedMessages = this.unreadMessages.length === 0;
+		if (hasReadAllQueuedMessages && this.onMessageCallback) {
+			this.onMessageCallback(message);
+		} else {
+			this.unreadMessages.push(message);
+		}
 	}
 
 	/**
-	 * Is resolved when the stream closed.
+	 * Call this in derived classes to signal that the connection closed.
 	 */
-	public readonly onClosed: Promise<void>;
-
-	/**
-	 * Sets a callback for incoming messages.
-	 */
-	public setReadCallback(
-		callback: ((readMessage: Message) => void) | undefined
-	) {
-		this.onMessageCallback = callback;
-
-		if (!callback) return;
-
-		while (this.unreadMessages.length > 0) {
-			const msg = this.unreadMessages.shift()!;
-			callback(msg);
-		}
+	protected onConnectionClosed(): void {
+		this.onClosedDeferred.resolve();
 	}
 }
 
@@ -122,7 +127,7 @@ export class StreamLogger implements MessageStream {
 			return;
 		}
 
-		this.baseStream.setReadCallback(readMessage => {
+		this.baseStream.setReadCallback((readMessage) => {
 			this.logger.log(this.baseStream, "incoming", readMessage);
 			callback(readMessage);
 		});

@@ -95,7 +95,7 @@ Server:
 import { startWebSocketServer } from "@hediet/json-rpc-websocket-server";
 
 const clients = new Set<typeof myRpcContract.TClientInterface>();
-startWebSocketServer({ port: 12345 }, async stream => {
+startWebSocketServer({ port: 12345 }, async (stream) => {
 	// `stream` provides methods to send and receive messages
 	const { client } = myRpcContract.registerServerToStream(
 		stream,
@@ -206,7 +206,7 @@ const { server } = myRpcContract.getServerFromStream(
 
 # Architecture of `@hediet/json-rpc`
 
-![classes](docs/exported/main/Main.png)
+![classes](docs/exported/main/Main.svg)
 
 Extend `BaseMessageStream` if you want to implement custom message transport.
 
