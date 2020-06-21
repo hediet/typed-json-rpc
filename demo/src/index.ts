@@ -29,7 +29,7 @@ const chatContract = contract({
 	},
 	client: {
 		onNewMessage: notificationType({
-			params: s.sObject({ msg: s.sString }),
+			params: s.sObject({ msg: s.sString() }),
 		}),
 	},
 });
@@ -39,13 +39,13 @@ const logger = new ConsoleRpcLogger();
 
 const srvr = startWebSocketServer(
 	{ listenOn: { port: "random" } },
-	async stream => {
+	async (stream) => {
 		const { client, channel } = Contract.registerServerToStream(
 			chatContract,
 			stream,
 			logger,
 			{
-				sendMessage: async args => {
+				sendMessage: async (args) => {
 					console.log(args.msg);
 					for (const c of clients) {
 						c.onNewMessage({ msg: args.msg });
@@ -90,4 +90,4 @@ setInterval(() => {
 	console.log("step");
 }, 1000);
 
-main().catch(e => console.error(e));
+main().catch((e) => console.error(e));

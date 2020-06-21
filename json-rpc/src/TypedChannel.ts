@@ -2,8 +2,8 @@ import {
 	Serializer,
 	sAny,
 	sObject,
-	sVoid,
 	BaseSerializer,
+	sNull,
 } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import {
@@ -24,6 +24,7 @@ import { MessageStream } from "./MessageStream";
 import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "./StreamBasedChannel";
+import { EventEmitter } from "@hediet/std/events";
 
 /**
  * Represents a typed channel.
@@ -70,6 +71,11 @@ export class TypedChannel {
 
 	private listeningDeferred = new Deferred();
 	public onListening: Promise<void> = this.listeningDeferred.promise;
+
+	private readonly requestDidErrorEventEmitter = new EventEmitter<{
+		error: RequestHandlingError;
+	}>();
+	public readonly onRequestDidError = this.requestDidErrorEventEmitter.asEvent();
 
 	/**
 	 * This method must be called to forward messages from the stream to this channel.
@@ -377,12 +383,26 @@ export class TypedChannel {
 		});
 
 		if ("error" in response) {
-			const e = new RequestHandlingError(
+			let errorData;
+			if (response.error.data !== undefined) {
+				const deserializationResult = requestType.errorSerializer.deserialize(
+					response.error.data
+				);
+				if (deserializationResult.hasErrors) {
+					throw new Error(deserializationResult.formatError());
+				}
+				errorData = deserializationResult.value;
+			} else {
+				errorData = undefined;
+			}
+
+			const error = new RequestHandlingError(
 				response.error.message,
-				response.error.data,
+				errorData,
 				response.error.code
 			);
-			throw e;
+			this.requestDidErrorEventEmitter.emit({ error });
+			throw error;
 		} else {
 			const result = requestType.resultSerializer.deserialize(
 				response.result
@@ -553,9 +573,17 @@ export function requestType<
 	return new RequestType(
 		request.method!,
 		request.params ? request.params : sObject({}),
-		request.result ? request.result : sVoid(),
-		request.error ? request.error : sVoid()
+		request.result ? request.result : sVoidToNull(),
+		request.error ? request.error : sVoidToNull()
 	);
+}
+
+export function sVoidToNull(): Serializer<void> {
+	return sNull().refine({
+		canSerialize: (val): val is void => val === undefined,
+		fromIntermediate: (i) => undefined,
+		toIntermediate: (i) => null,
+	});
 }
 
 /**
