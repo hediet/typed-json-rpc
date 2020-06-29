@@ -10,7 +10,7 @@ import {
  * A channel has methods to send requests and notifications.
  * A request expects a response, a notification does not.
  */
-export interface Channel {
+export interface Channel<TContext = void> {
 	/**
 	 * Sends a request.
 	 * @param request - The request to send.
@@ -20,6 +20,7 @@ export interface Channel {
 	 */
 	sendRequest(
 		request: RequestObject,
+		context: TContext,
 		messageIdCallback?: (requestId: RequestId) => void
 	): Promise<ResponseObject>;
 
@@ -28,7 +29,10 @@ export interface Channel {
 	 * @return A promise that is fulfilled as soon as the notification has been sent successfully.
 	 *  	Fails if the notification could not be sent.
 	 */
-	sendNotification(notification: RequestObject): Promise<void>;
+	sendNotification(
+		notification: RequestObject,
+		context: TContext
+	): Promise<void>;
 
 	/**
 	 * Returns human readable information of this channel.
@@ -40,15 +44,19 @@ export interface Channel {
  * A request handler can handle requests and notifications.
  * Implementations must respond to all requests.
  */
-export interface RequestHandler {
+export interface RequestHandler<TContext = void> {
 	/**
 	 * Handles an incoming request.
 	 */
 	handleRequest(
 		request: RequestObject,
-		requestId: RequestId
+		requestId: RequestId,
+		context: TContext
 	): Promise<ResponseObject>;
-	handleNotification(request: RequestObject): Promise<void>;
+	handleNotification(
+		request: RequestObject,
+		context: TContext
+	): Promise<void>;
 }
 
 /**
@@ -79,34 +87,78 @@ export type ResponseObject =
  * Is used to delay setting a `RequestHandler`.
  * Once a channel is constructed, it processes all incoming messages.
  */
-export interface ChannelFactory {
-	createChannel(listener: RequestHandler | undefined): Channel;
+export class ChannelFactory<TContext = void, TChannelContext = void> {
+	constructor(
+		public readonly createChannel: (
+			listener: RequestHandler<TContext> | undefined
+		) => Channel<TChannelContext>
+	) {}
+
+	public mapContext<TNewContext>(
+		map: (context: TContext) => TNewContext
+	): ChannelFactory<TNewContext, TChannelContext> {
+		return new ChannelFactory<TNewContext, TChannelContext>((listener) =>
+			this.createChannel(
+				listener ? mapRequestHandlerContext(listener, map) : undefined
+			)
+		);
+	}
 }
 
 /**
  * Implements a channel that directly forwards the requests to the given request handler.
  */
-export class LoopbackChannel implements Channel {
+export class LoopbackChannel<TContext> implements Channel<TContext> {
 	private id: number = 0;
 
-	constructor(private readonly requestHandler: RequestHandler) {}
+	constructor(private readonly requestHandler: RequestHandler<TContext>) {}
 
 	public sendRequest(
 		request: RequestObject,
+		context: TContext,
 		messageIdCallback?: (requestId: RequestId) => void
 	): Promise<ResponseObject> {
 		const curId = this.id++;
 		if (messageIdCallback) {
 			messageIdCallback(curId);
 		}
-		return this.requestHandler.handleRequest(request, curId);
+		return this.requestHandler.handleRequest(request, curId, context);
 	}
 
-	public sendNotification(notification: RequestObject): Promise<void> {
-		return this.requestHandler.handleNotification(notification);
+	public sendNotification(
+		notification: RequestObject,
+		context: TContext
+	): Promise<void> {
+		return this.requestHandler.handleNotification(notification, context);
 	}
 
 	public toString(): string {
 		return "Loopback";
 	}
+}
+
+export function mapChannelContext<TContext, TNewContext>(
+	channel: Channel<TContext>,
+	map: (context: TNewContext) => TContext
+): Channel<TNewContext> {
+	return {
+		sendNotification: (notification, context) =>
+			channel.sendNotification(notification, map(context)),
+		sendRequest: (request, context, messageIdCallback) =>
+			channel.sendRequest(request, map(context), messageIdCallback),
+
+		toString: () => channel.toString(),
+	};
+}
+
+export function mapRequestHandlerContext<TContext, TNewContext>(
+	requestHandler: RequestHandler<TContext>,
+	map: (context: TNewContext) => TContext
+): RequestHandler<TNewContext> {
+	return {
+		handleNotification: (request, context) =>
+			requestHandler.handleNotification(request, map(context)),
+		handleRequest: (request, requestId, context) =>
+			requestHandler.handleRequest(request, requestId, map(context)),
+	};
 }

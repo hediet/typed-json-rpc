@@ -1,5 +1,6 @@
 import { Message, BaseMessageStream } from "@hediet/json-rpc";
 import WebSocket = require("isomorphic-ws");
+import { EventEmitter } from "@hediet/std/events";
 
 export type NormalizedWebSocketOptions = {
 	address: string;
@@ -44,7 +45,7 @@ export class WebSocketStream extends BaseMessageStream {
 		const ws = new WebSocket(normalizedOptions.address);
 		return new Promise((res, rej) => {
 			// don't use `on` as it does not exist for browsers
-			ws.onerror = err => {
+			ws.onerror = (err) => {
 				rej(err);
 			};
 			ws.onopen = () => {
@@ -53,21 +54,29 @@ export class WebSocketStream extends BaseMessageStream {
 		});
 	}
 
+	private readonly errorEmitter = new EventEmitter<{ error: Error }>();
+	public readonly onError = this.errorEmitter.asEvent();
+
 	constructor(private readonly socket: WebSocket) {
 		super();
 
-		socket.onmessage = msg => {
-			const data = msg.data;
-			if (typeof data === "string") {
-				const json = JSON.parse(data);
-				// TODO check type of json
-				this.onMessage(json);
-			} else {
-				throw new Error("Not supported"); // TODO test
+		socket.onmessage = (msg) => {
+			// If we throw an exception here, the entire process will crash.
+			try {
+				const data = msg.data;
+				if (typeof data === "string") {
+					const json = JSON.parse(data) as Message;
+					// TODO check type of json
+					this.onMessage(json);
+				} else {
+					throw new Error("Not supported"); // TODO test
+				}
+			} catch (error) {
+				this.errorEmitter.emit({ error });
 			}
 		};
 
-		socket.onclose = _event => {
+		socket.onclose = (_event) => {
 			this.onConnectionClosed();
 		};
 	}
@@ -90,7 +99,7 @@ export class WebSocketStream extends BaseMessageStream {
 		const str = JSON.stringify(message);
 
 		return new Promise((res, rej) => {
-			this.socket.send(str, err => {
+			this.socket.send(str, (err) => {
 				if (err) {
 					rej(err);
 				} else {

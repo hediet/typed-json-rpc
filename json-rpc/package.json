@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/json-rpc",
 	"description": "A strongly typed JSON RPC implementation.",
-	"version": "0.1.3",
+	"version": "0.1.5",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
@@ -19,7 +19,7 @@
 	},
 	"dependencies": {
 		"@hediet/std": "^0.6.0",
-		"@hediet/semantic-json": "^0.3.2"
+		"@hediet/semantic-json": "^0.3.3"
 	},
 	"devDependencies": {
 		"typescript": "^3.9.2"

@@ -26,13 +26,123 @@ import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "./StreamBasedChannel";
 import { EventEmitter } from "@hediet/std/events";
 
+export abstract class TypedChannelBase<TContext, TSendContext> {
+	public abstract request<TParams, TResponse>(
+		requestType: RequestType<TParams, TResponse, unknown>,
+		args: TParams,
+		context: TSendContext
+	): Promise<TResponse>;
+
+	public abstract notify<TParams>(
+		notificationType: NotificationType<TParams>,
+		params: TParams,
+		context: TSendContext
+	): void;
+
+	public abstract registerNotificationHandler<TArgs>(
+		type: NotificationType<TArgs>,
+		handler: NotificationHandlerFunc<TArgs, TContext>
+	): Disposable;
+
+	public abstract registerRequestHandler<TArgs, TResponse, TError>(
+		requestType: RequestType<TArgs, TResponse, TError>,
+		handler: RequestHandlerFunc<TArgs, TResponse, TError, TContext>
+	): Disposable;
+
+	public contextualize<TNewContext, TNewSendContext>(args: {
+		getNewContext: (
+			context: TContext
+		) => Promise<TNewContext> | TNewContext;
+		getSendContext: (
+			newSendContext: TNewSendContext
+		) => Promise<TSendContext> | TSendContext;
+	}): TypedChannelBase<TNewContext, TNewSendContext> {
+		return new ContextualizedTypedChannel(this, args);
+	}
+}
+
+class ContextualizedTypedChannel<
+	TNewContext,
+	TNewSendContext,
+	TContext,
+	TSendContext
+> extends TypedChannelBase<TNewContext, TNewSendContext> {
+	constructor(
+		private readonly underylingTypedChannel: TypedChannelBase<
+			TContext,
+			TSendContext
+		>,
+		private readonly converters: {
+			getNewContext: (
+				context: TContext
+			) => Promise<TNewContext> | TNewContext;
+			getSendContext: (
+				newSendContext: TNewSendContext
+			) => Promise<TSendContext> | TSendContext;
+		}
+	) {
+		super();
+	}
+
+	public async request<TParams, TResponse>(
+		requestType: RequestType<TParams, TResponse, unknown>,
+		args: TParams,
+		newContext: TNewSendContext
+	): Promise<TResponse> {
+		const context = await this.converters.getSendContext(newContext);
+		return this.underylingTypedChannel.request(requestType, args, context);
+	}
+
+	public async notify<TParams>(
+		notificationType: NotificationType<TParams>,
+		params: TParams,
+		newContext: TNewSendContext
+	): Promise<void> {
+		const context = await this.converters.getSendContext(newContext);
+		return this.underylingTypedChannel.notify(
+			notificationType,
+			params,
+			context
+		);
+	}
+
+	public registerNotificationHandler<TArgs>(
+		type: NotificationType<TArgs>,
+		handler: NotificationHandlerFunc<TArgs, TNewContext>
+	): Disposable {
+		return this.underylingTypedChannel.registerNotificationHandler(
+			type,
+			async (arg, context) => {
+				const newContext = await this.converters.getNewContext(context);
+				return await handler(arg, newContext);
+			}
+		);
+	}
+
+	public registerRequestHandler<TArgs, TResponse, TError>(
+		requestType: RequestType<TArgs, TResponse, TError>,
+		handler: RequestHandlerFunc<TArgs, TResponse, TError, TNewContext>
+	): Disposable {
+		return this.underylingTypedChannel.registerRequestHandler(
+			requestType,
+			async (arg, requestId, context) => {
+				const newContext = await this.converters.getNewContext(context);
+				return await handler(arg, requestId, newContext);
+			}
+		);
+	}
+}
+
 /**
  * Represents a typed channel.
  * Call `startListen` to create the underlying channel
  * and to start processing all incoming messages.
  * At this point, all request and notification handlers should be registered.
  */
-export class TypedChannel {
+export class TypedChannel<
+	TContext = void,
+	TSendContext = void
+> extends TypedChannelBase<TContext, TSendContext> {
 	public static fromStream(
 		stream: MessageStream,
 		logger: RpcLogger | undefined
@@ -41,10 +151,11 @@ export class TypedChannel {
 		return new TypedChannel(channelFactory, logger);
 	}
 
-	private channel: Channel | undefined = undefined;
+	private channel: Channel<TSendContext> | undefined = undefined;
 	private readonly handler = new Map<
 		string,
-		RegisteredRequestHandler | RegisteredNotificationHandler
+		| RegisteredRequestHandler<any, any, any, TContext>
+		| RegisteredNotificationHandler<any, TContext>
 	>();
 	private readonly unknownNotificationHandler = new Set<
 		(notification: RequestObject) => void
@@ -53,9 +164,10 @@ export class TypedChannel {
 	public sendExceptionDetails: boolean = false;
 
 	constructor(
-		private readonly channelCtor: ChannelFactory,
+		private readonly channelCtor: ChannelFactory<TContext, TSendContext>,
 		private readonly logger: RpcLogger | undefined
 	) {
+		super();
 		if (process.env.NODE_ENV !== "production") {
 			this.timeout = startTimeout(1000, () => {
 				if (!this.channel) {
@@ -93,14 +205,18 @@ export class TypedChannel {
 			this.timeout = undefined;
 		}
 		this.channel = this.channelCtor.createChannel({
-			handleRequest: (req, id) => this.handleRequest(req, id),
-			handleNotification: (req) => this.handleNotification(req),
+			handleRequest: (req, id, context) =>
+				this.handleRequest(req, id, context),
+			handleNotification: (req, context) =>
+				this.handleNotification(req, context),
 		});
 
 		this.listeningDeferred.resolve();
 	}
 
-	private checkChannel(channel: Channel | undefined): channel is Channel {
+	private checkChannel(
+		channel: Channel<TSendContext> | undefined
+	): channel is Channel<TSendContext> {
 		if (!channel) {
 			throw new Error(
 				`"${this.startListen.name}" must be called before any messages can be sent or received.`
@@ -111,15 +227,17 @@ export class TypedChannel {
 
 	private async handleRequest(
 		request: RequestObject,
-		requestId: RequestId
+		requestId: RequestId,
+		context: TContext
 	): Promise<ResponseObject> {
 		const handler = this.handler.get(request.method) as
 			| RegisteredRequestHandler<
 					{ brand: "params" },
 					{ brand: "result" },
-					{ brand: "error" }
+					{ brand: "error" },
+					TContext
 			  >
-			| RegisteredNotificationHandler<{ brand: "params" }>
+			| RegisteredNotificationHandler<{ brand: "params" }, TContext>
 			| undefined;
 
 		if (!handler) {
@@ -189,7 +307,7 @@ export class TypedChannel {
 			const args = decodeResult.value;
 			let response: ResponseObject;
 			try {
-				const result = await handler.handler(args, requestId);
+				const result = await handler.handler(args, requestId, context);
 				if ("error" in result || "errorMessage" in result) {
 					const errorData = result.error
 						? handler.requestType.errorSerializer.serialize(
@@ -215,28 +333,42 @@ export class TypedChannel {
 					response = { result: val };
 				}
 			} catch (exception) {
-				if (this.logger) {
-					this.logger.warn({
-						text: `An exception was thrown while handling a request: ${exception.toString()}.`,
-						exception,
-						data: { requestObject: request },
-					});
+				if (exception instanceof RequestHandlingError) {
+					//  TODO: Introduce a better custom error
+					// What about data?
+					// Maybe default error data should be unknown
+					response = {
+						error: {
+							code: exception.code,
+							message: exception.message,
+						},
+					};
+				} else {
+					if (this.logger) {
+						this.logger.warn({
+							text: `An exception was thrown while handling a request: ${exception.toString()}.`,
+							exception,
+							data: { requestObject: request },
+						});
+					}
+					response = {
+						error: {
+							code: ErrorCode.unexpectedServerError,
+							message: this.sendExceptionDetails
+								? `An exception was thrown while handling a request: ${exception.toString()}.`
+								: "Server has thrown an unexpected exception",
+						},
+					};
 				}
-
-				response = {
-					error: {
-						code: ErrorCode.unexpectedServerError,
-						message: this.sendExceptionDetails
-							? `An exception was thrown while handling a request: ${exception.toString()}.`
-							: "Server has thrown an unexpected exception",
-					},
-				};
 			}
 			return response;
 		}
 	}
 
-	private async handleNotification(request: RequestObject): Promise<void> {
+	private async handleNotification(
+		request: RequestObject,
+		context: TContext
+	): Promise<void> {
 		const handler = this.handler.get(request.method);
 		if (!handler) {
 			for (const h of this.unknownNotificationHandler) {
@@ -286,7 +418,7 @@ export class TypedChannel {
 
 		for (const handlerFunc of handler.handlers) {
 			try {
-				handlerFunc(val);
+				handlerFunc(val, context);
 			} catch (exception) {
 				if (this.logger) {
 					this.logger.warn({
@@ -297,8 +429,6 @@ export class TypedChannel {
 				}
 			}
 		}
-
-		return;
 	}
 
 	public registerUnknownNotificationHandler(
@@ -309,7 +439,7 @@ export class TypedChannel {
 
 	public registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
-		handler: RequestHandlerFunc<TArgs, TResponse, TError>
+		handler: RequestHandlerFunc<TArgs, TResponse, TError, TContext>
 	): Disposable {
 		const registeredHandler = this.handler.get(requestType.method);
 		if (registeredHandler) {
@@ -327,7 +457,7 @@ export class TypedChannel {
 
 	public registerNotificationHandler<TArgs>(
 		type: NotificationType<TArgs>,
-		handler: NotificationHandlerFunc<TArgs>
+		handler: NotificationHandlerFunc<TArgs, TContext>
 	): Disposable {
 		let registeredHandler = this.handler.get(type.method);
 		if (!registeredHandler) {
@@ -367,7 +497,8 @@ export class TypedChannel {
 
 	public async request<TParams, TResponse>(
 		requestType: RequestType<TParams, TResponse, unknown>,
-		args: TParams
+		args: TParams,
+		context: TSendContext
 	): Promise<TResponse> {
 		if (!this.checkChannel(this.channel)) {
 			throw new Error("Impossible");
@@ -377,10 +508,13 @@ export class TypedChannel {
 
 		assertObjectArrayOrNull(params);
 
-		const response = await this.channel.sendRequest({
-			method: requestType.method,
-			params,
-		});
+		const response = await this.channel.sendRequest(
+			{
+				method: requestType.method,
+				params,
+			},
+			context
+		);
 
 		if ("error" in response) {
 			let errorData;
@@ -415,10 +549,11 @@ export class TypedChannel {
 		}
 	}
 
-	public notify<TParams>(
+	public async notify<TParams>(
 		notificationType: NotificationType<TParams>,
-		params: TParams
-	): void {
+		params: TParams,
+		context: TSendContext
+	): Promise<void> {
 		if (!this.checkChannel(this.channel)) {
 			throw "";
 		}
@@ -429,10 +564,13 @@ export class TypedChannel {
 
 		assertObjectArrayOrNull(encodedParams);
 
-		this.channel.sendNotification({
-			method: notificationType.method,
-			params: encodedParams,
-		});
+		this.channel.sendNotification(
+			{
+				method: notificationType.method,
+				params: encodedParams,
+			},
+			context
+		);
 	}
 
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {
@@ -468,23 +606,27 @@ export type ErrorResult<TError> =
 			errorCode?: ErrorCode;
 	  };
 
-export type RequestHandlerFunc<TArg, TResult, TError> = (
+export type RequestHandlerFunc<TArg, TResult, TError, TContext> = (
 	arg: TArg,
-	requestId: RequestId
+	requestId: RequestId,
+	context: TContext
 ) => Promise<Result<TResult, TError>>;
 
-export type NotificationHandlerFunc<TArg> = (arg: TArg) => void;
+export type NotificationHandlerFunc<TArg, TContext> = (
+	arg: TArg,
+	context: TContext
+) => void;
 
-interface RegisteredRequestHandler<TArg = any, TResult = any, TError = any> {
+interface RegisteredRequestHandler<TArg, TResult, TError, TContext> {
 	readonly kind: "request";
 	readonly requestType: RequestType<TArg, TResult, TError>;
-	readonly handler: RequestHandlerFunc<TArg, TResult, TError>;
+	readonly handler: RequestHandlerFunc<TArg, TResult, TError, TContext>;
 }
 
-interface RegisteredNotificationHandler<TArg = any> {
+interface RegisteredNotificationHandler<TArg, TContext> {
 	readonly kind: "notification";
 	readonly notificationType: NotificationType<TArg>;
-	readonly handlers: Set<NotificationHandlerFunc<TArg>>;
+	readonly handlers: Set<NotificationHandlerFunc<TArg, TContext>>;
 }
 
 /**

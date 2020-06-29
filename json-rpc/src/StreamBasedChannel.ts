@@ -30,18 +30,16 @@ export class StreamBasedChannel implements Channel {
 		logger: RpcLogger | undefined
 	): ChannelFactory {
 		let constructed = false;
-		return {
-			createChannel: (listener) => {
-				if (constructed) {
-					throw new Error(
-						`A channel to the stream ${stream} was already constructed!`
-					);
-				} else {
-					constructed = true;
-				}
-				return new StreamBasedChannel(stream, listener, logger);
-			},
-		};
+		return new ChannelFactory((listener) => {
+			if (constructed) {
+				throw new Error(
+					`A channel to the stream ${stream} was already constructed!`
+				);
+			} else {
+				constructed = true;
+			}
+			return new StreamBasedChannel(stream, listener, logger);
+		});
 	}
 
 	private readonly unprocessedResponses = new Map<
@@ -177,6 +175,7 @@ export class StreamBasedChannel implements Channel {
 
 	public sendRequest(
 		request: RequestObject,
+		context: void,
 		messageIdCallback?: (requestId: RequestId) => void
 	): Promise<ResponseObject> {
 		const message: Message = {
@@ -215,7 +214,10 @@ export class StreamBasedChannel implements Channel {
 		});
 	}
 
-	public sendNotification(notification: RequestObject): Promise<void> {
+	public sendNotification(
+		notification: RequestObject,
+		context: void
+	): Promise<void> {
 		const msg: Message = {
 			jsonrpc: "2.0",
 			id: undefined,
