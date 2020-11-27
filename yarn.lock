@@ -755,10 +755,23 @@
     classnames "^2.2"
     tslib "~1.9.0"
 
-"@hediet/semantic-json@0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@hediet/semantic-json/-/semantic-json-0.1.0.tgz#ca3831778f1e59e555d0112decd5fe598437fdd3"
-  integrity sha512-lNdXabUmyxXnysXadTKyiKK9ik5L8b9SXu/QshgvE271QObPtp2Ubmh+rLNNCEAO65DE2VAxcesWmRKYfaQSJg==
+"@hediet/json-rpc@^0.1.0":
+  version "0.1.5"
+  resolved "https://registry.yarnpkg.com/@hediet/json-rpc/-/json-rpc-0.1.5.tgz#a33180c09b448ac9af3580ecb089df2f58879a01"
+  integrity sha512-qPtNfhlobnuQvfQ2uCdg+9RIdoAs9MOEXcRrD9YIy2zhRUkvZ3WDXOUx0pUdr3Nd762nDocjZI/XrOBbABtUVw==
+  dependencies:
+    "@hediet/semantic-json" "^0.3.3"
+    "@hediet/std" "^0.6.0"
+
+"@hediet/semantic-json@^0.3.3":
+  version "0.3.15"
+  resolved "https://registry.yarnpkg.com/@hediet/semantic-json/-/semantic-json-0.3.15.tgz#e38f799b1a7dd2624a3ee2e05bca58cfe76cb58d"
+  integrity sha512-8t1NXiYDF2wqIt1jEknxNnpucdtgFAI2MGSWnnewDhaYqWOJLMY/MxH60gDX03vycf2ySb6vEYpEwsiB6r0O3Q==
+
+"@hediet/semantic-json@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/@hediet/semantic-json/-/semantic-json-0.4.1.tgz#762190c1c8ad79105c2655c6a33b3abc0a1cdfb3"
+  integrity sha512-OgAIBcy3f/ppM79YgVzHMZlK264WjkH5tr4qDLQaJksZxGbJQgtZlDOeEbAAoPXi6lzxpnMgHD3DjSIL2xVVuQ==
 
 "@hediet/std@^0.6.0":
   version "0.6.0"

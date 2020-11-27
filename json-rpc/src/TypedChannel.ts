@@ -4,6 +4,7 @@ import {
 	sObject,
 	BaseSerializer,
 	sNull,
+	DeserializeContext,
 } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import {
@@ -133,6 +134,14 @@ class ContextualizedTypedChannel<
 	}
 }
 
+export interface TypedChannelOptions {
+	logger?: RpcLogger;
+	/**
+	 * If true, any sent or received unexpected properties are ignored.
+	 */
+	ignoreUnexpectedPropertiesInResponses?: boolean;
+}
+
 /**
  * Represents a typed channel.
  * Call `startListen` to create the underlying channel
@@ -145,10 +154,13 @@ export class TypedChannel<
 > extends TypedChannelBase<TContext, TSendContext> {
 	public static fromStream(
 		stream: MessageStream,
-		logger: RpcLogger | undefined
+		options: TypedChannelOptions = {}
 	): TypedChannel {
-		const channelFactory = StreamBasedChannel.getFactory(stream, logger);
-		return new TypedChannel(channelFactory, logger);
+		const channelFactory = StreamBasedChannel.getFactory(
+			stream,
+			options.logger
+		);
+		return new TypedChannel(channelFactory, options);
 	}
 
 	private channel: Channel<TSendContext> | undefined = undefined;
@@ -163,11 +175,16 @@ export class TypedChannel<
 	private timeout: Disposable | undefined;
 	public sendExceptionDetails: boolean = false;
 
+	private readonly logger: RpcLogger | undefined;
+	private readonly ignoreUnexpectedPropertiesInResponses: boolean;
+
 	constructor(
 		private readonly channelCtor: ChannelFactory<TContext, TSendContext>,
-		private readonly logger: RpcLogger | undefined
+		options: TypedChannelOptions = {}
 	) {
 		super();
+		this.logger = options.logger;
+		this.ignoreUnexpectedPropertiesInResponses = !!options.ignoreUnexpectedPropertiesInResponses;
 		if (process.env.NODE_ENV !== "production") {
 			this.timeout = startTimeout(1000, () => {
 				if (!this.channel) {
@@ -397,8 +414,12 @@ export class TypedChannel<
 			return;
 		}
 
+		const deserializeContext = this.ignoreUnexpectedPropertiesInResponses
+			? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
+			: DeserializeContext.default;
 		const decodeResult = handler.notificationType.paramsSerializer.deserialize(
-			request.params
+			request.params,
+			deserializeContext
 		);
 		if (decodeResult.hasErrors) {
 			if (this.logger) {
@@ -508,6 +529,12 @@ export class TypedChannel<
 
 		assertObjectArrayOrNull(params);
 
+		if (this.ignoreUnexpectedPropertiesInResponses) {
+			if (typeof params === "object" && params !== null) {
+				(params as any)["$ignoreUnexpectedProperties"] = true;
+			}
+		}
+
 		const response = await this.channel.sendRequest(
 			{
 				method: requestType.method,
@@ -538,8 +565,13 @@ export class TypedChannel<
 			this.requestDidErrorEventEmitter.emit({ error });
 			throw error;
 		} else {
+			const deserializeContext = this
+				.ignoreUnexpectedPropertiesInResponses
+				? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
+				: DeserializeContext.default;
 			const result = requestType.resultSerializer.deserialize(
-				response.result
+				response.result,
+				deserializeContext
 			);
 			if (result.hasErrors) {
 				throw new Error(result.formatError());
@@ -563,6 +595,11 @@ export class TypedChannel<
 		);
 
 		assertObjectArrayOrNull(encodedParams);
+		if (this.ignoreUnexpectedPropertiesInResponses) {
+			if (typeof params === "object" && params !== null) {
+				(params as any)["$ignoreUnexpectedProperties"] = true;
+			}
+		}
 
 		this.channel.sendNotification(
 			{
