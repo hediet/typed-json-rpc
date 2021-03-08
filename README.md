@@ -65,6 +65,7 @@ import {
 } from "@hediet/json-rpc";
 
 const myRpcContract = contract({
+	name: "MyRpcContract",
 	// the interface for clients to interact with servers
 	server: {
 		calculate: requestType({
@@ -185,7 +186,7 @@ const worker = new Worker("./browser-worker.ts");
 const { server } = Contract.getServerFromStream(
 	myRpcContract,
 	connectToWorker(worker),
-	logger,
+	{ logger },
 	{
 		progress: ({ progress }) => console.log("progress", progress),
 	}
@@ -197,12 +198,12 @@ Web-Worker:
 
 ```ts
 import { Contract } from "@hediet/json-rpc";
-import { workerConnectToParent } from "@hediet/json-rpc-browser";
+import { connectWorkerToParent } from "@hediet/json-rpc-browser";
 
 const { server } = Contract.getServerFromStream(
 	myRpcContract,
-	workerConnectToParent(),
-	logger,
+	connectWorkerToParent(),
+	{ logger },
 	{
 		calculate: async ({ data }) => {
 			await client.progress({ progress: 0.5 });
