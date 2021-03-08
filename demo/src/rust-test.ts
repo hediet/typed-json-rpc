@@ -1,3 +1,4 @@
+/*
 import {
 	semanticJson as s,
 	contract,
@@ -43,3 +44,5 @@ async function main() {
 }
 
 main();
+
+*/

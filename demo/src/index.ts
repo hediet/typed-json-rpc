@@ -1,3 +1,4 @@
+/*
 import {
 	contract,
 	semanticJson as s,
@@ -23,7 +24,7 @@ const chatContract = contract({
 				canSerialize: (obj): obj is { msg: string } => true,
 				deserialize: o => s.deserializationValue({ msg: o[0] }),
 				serialize: o => [o.msg],
-			}),*/
+			}),* /
 		}),
 		ping: requestType({}),
 	},
@@ -91,3 +92,4 @@ setInterval(() => {
 }, 1000);
 
 main().catch((e) => console.error(e));
+*/

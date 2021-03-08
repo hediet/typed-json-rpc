@@ -1,3 +1,4 @@
+/*
 import {
 	contract,
 	requestContract,
@@ -5,7 +6,7 @@ import {
 } from "@hediet/json-rpc";
 import * as t from "io-ts";
 
-/*
+
 export const app = contract({
     server: {
         copy: requestContract({

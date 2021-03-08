@@ -4,11 +4,13 @@
 		"outDir": "./dist",
 		"rootDir": "./src",
 		"module": "ESNext",
-		"moduleResolution": "Node"
+		"moduleResolution": "Node",
+		"skipLibCheck": true
 	},
 	"references": [
 		{ "path": "../json-rpc" },
 		{ "path": "../json-rpc-websocket" },
 		{ "path": "../json-rpc-websocket-server" }
-	]
+	],
+	"include": ["./src/**/*"]
 }
