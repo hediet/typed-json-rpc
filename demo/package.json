@@ -6,7 +6,8 @@
 		"name": "Henning Dieterichs"
 	},
 	"scripts": {
-		"dev": "tsc --watch"
+		"dev": "tsc --watch",
+		"build": "tsc"
 	},
 	"dependencies": {
 		"@hediet/json-rpc": "*",

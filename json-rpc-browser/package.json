@@ -19,7 +19,7 @@
 	},
 	"dependencies": {
 		"@hediet/std": "^0.6.0",
-		"@hediet/json-rpc": "^0.2.0"
+		"@hediet/json-rpc": "^0.3.0"
 	},
 	"publishConfig": {
 		"access": "public",

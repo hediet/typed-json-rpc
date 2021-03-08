@@ -8,5 +8,15 @@
 		"json-rpc-browser",
 		"json-rpc-gui",
 		"demo"
-	]
+	],
+	"scripts": {
+		"build": "yarn build-json-rpc && yarn build-json-rpc-websocket && yarn build-json-rpc-websocket-server && yarn build-json-rpc-streams && yarn build-json-rpc-browser && yarn build-json-rpc-gui && yarn build-demo",
+		"build-json-rpc": "yarn workspace @hediet/json-rpc build",
+		"build-json-rpc-websocket": "yarn workspace @hediet/json-rpc-websocket build",
+		"build-json-rpc-websocket-server": "yarn workspace @hediet/json-rpc-websocket-server build",
+		"build-json-rpc-streams": "yarn workspace @hediet/json-rpc-streams build",
+		"build-json-rpc-browser": "yarn workspace @hediet/json-rpc-browser build",
+		"build-json-rpc-gui": "echo 'nothing to do'",
+		"build-demo": "yarn workspace demo build"
+	}
 }
