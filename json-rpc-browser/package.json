@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/json-rpc-browser",
 	"description": "Provides JSON RPC through window.postMessage.",
-	"version": "0.1.0",
+	"version": "0.3.0",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"
@@ -19,7 +19,7 @@
 	},
 	"dependencies": {
 		"@hediet/std": "^0.6.0",
-		"@hediet/json-rpc": "^0.1.0"
+		"@hediet/json-rpc": "^0.2.0"
 	},
 	"publishConfig": {
 		"access": "public",

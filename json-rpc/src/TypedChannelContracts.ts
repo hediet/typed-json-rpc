@@ -6,6 +6,7 @@ import {
 	ErrorResult,
 	RequestHandlerFunc,
 	TypedChannelBase,
+	TypedChannelOptions,
 } from "./TypedChannel";
 import { RequestId } from "./JsonRpcTypes";
 import { MessageStream } from "./MessageStream";
@@ -97,9 +98,7 @@ export type ContractHandlerOf<
 	TContext,
 	TOtherContext
 > = {
-	[TKey in RequestKeys<
-		TRequestMap
-	>]: TRequestMap[TKey] extends AnyRequestContract
+	[TKey in RequestKeys<TRequestMap>]: TRequestMap[TKey] extends AnyRequestContract
 		? (
 				arg: TRequestMap[TKey]["paramsSerializer"]["T"],
 				info: RequestHandlerInfo<
@@ -395,13 +394,13 @@ export class Contract<
 	>(
 		contract: TContract,
 		stream: MessageStream,
-		logger: RpcLogger | undefined,
+		options: TypedChannelOptions,
 		clientImplementation: TContract["TClientHandler"]
 	): {
 		server: TContract["TServerInterface"];
 		channel: TypedChannel<void, void>;
 	} {
-		const channel = TypedChannel.fromStream(stream, logger);
+		const channel = TypedChannel.fromStream(stream, options);
 		const { server } = contract.getServer(channel, clientImplementation);
 		channel.startListen();
 
@@ -418,13 +417,13 @@ export class Contract<
 	>(
 		contract: TContract,
 		stream: MessageStream,
-		logger: RpcLogger | undefined,
+		options: TypedChannelOptions,
 		serverImplementation: TContract["TServerHandler"]
 	): {
 		client: TContract["TClientInterface"];
 		channel: TypedChannel<void, void>;
 	} {
-		const channel = TypedChannel.fromStream(stream, logger);
+		const channel = TypedChannel.fromStream(stream, options);
 		const { client } = contract.registerServer(
 			channel,
 			serverImplementation

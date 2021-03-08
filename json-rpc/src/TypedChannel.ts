@@ -5,6 +5,7 @@ import {
 	BaseSerializer,
 	sNull,
 	DeserializeContext,
+	sOpenObject,
 } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import {
@@ -140,6 +141,7 @@ export interface TypedChannelOptions {
 	 * If true, any sent or received unexpected properties are ignored.
 	 */
 	ignoreUnexpectedPropertiesInResponses?: boolean;
+	sendExceptionDetails?: boolean;
 }
 
 /**
@@ -185,6 +187,7 @@ export class TypedChannel<
 		super();
 		this.logger = options.logger;
 		this.ignoreUnexpectedPropertiesInResponses = !!options.ignoreUnexpectedPropertiesInResponses;
+		this.sendExceptionDetails = !!options.sendExceptionDetails;
 		if (process.env.NODE_ENV !== "production") {
 			this.timeout = startTimeout(1000, () => {
 				if (!this.channel) {
@@ -757,6 +760,17 @@ export function requestType<
 	);
 }
 
+export function unverifiedRequest<
+	TParams = {},
+	TResult = void,
+	TError = void,
+	TMethod extends string | undefined = undefined
+>(request?: {
+	method?: TMethod;
+}): RequestType<TParams, TResult, TError, TMethod> {
+	return new RequestType((request || {}).method!, sAny(), sAny(), sAny());
+}
+
 export function sVoidToNull(): Serializer<void> {
 	return sNull().refine({
 		canSerialize: (val): val is void => val === undefined,
@@ -779,6 +793,13 @@ export function notificationType<
 		notification.method!,
 		notification.params ? notification.params : sObject({})
 	);
+}
+
+export function unverifiedNotification<
+	TParams,
+	TMethod extends string | undefined = undefined
+>(request?: { method?: TMethod }): NotificationType<TParams, TMethod> {
+	return new NotificationType((request || {}).method!, sAny());
 }
 
 function setAndDeleteOnDispose<T>(set: Set<T>, item: T): Disposable;

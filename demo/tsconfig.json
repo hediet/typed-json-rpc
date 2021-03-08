@@ -2,7 +2,9 @@
 	"extends": "../tsconfig.settings.json",
 	"compilerOptions": {
 		"outDir": "./dist",
-		"rootDir": "./src"
+		"rootDir": "./src",
+		"module": "ESNext",
+		"moduleResolution": "Node"
 	},
 	"references": [
 		{ "path": "../json-rpc" },
