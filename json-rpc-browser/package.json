@@ -1,7 +1,7 @@
 {
 	"name": "@hediet/json-rpc-browser",
 	"description": "Provides JSON RPC through window.postMessage.",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"author": {
 		"name": "Henning Dieterichs",
 		"email": "henning.dieterichs@live.de"

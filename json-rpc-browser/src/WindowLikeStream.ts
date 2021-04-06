@@ -22,7 +22,7 @@ export class WindowLikeStream extends BaseMessageStream {
 			if (this.source && source !== this.source) {
 				return;
 			}
-			if ("rpcMsg" in data) {
+			if (typeof data === "object" && data && "rpcMsg" in data) {
 				this.onMessage(data.rpcMsg);
 			}
 		});
