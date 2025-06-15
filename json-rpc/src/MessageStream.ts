@@ -1,29 +1,22 @@
+import { IValueWithChangeEvent, ValueWithChangeEvent } from "./base";
 import { Message } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
-import { Deferred } from "@hediet/std/synchronization";
 
 /**
  * Represents a bidirectional stream of messages.
  * No messages are lost when delaying reading with `setReadCallback`.
  */
-export interface MessageStream {
-	/**
-	 * Is resolved when the stream closed.
-	 */
-	onClosed: Promise<void>;
+export interface IMessageStream {
 
-	/**
-	 * Writes a message to the stream.
-	 */
+	isClosed: IValueWithChangeEvent<boolean>;
+
 	write(message: Message): Promise<void>;
 
 	/**
 	 * Sets a callback for incoming messages.
 	 * Processes all yet unhandled and future incoming messages.
 	 */
-	setReadCallback(
-		callback: ((readMessage: Message) => void) | undefined
-	): void;
+	setReadCallback(callback: ((readMessage: Message) => void) | undefined): void;
 
 	/**
 	 * Returns human readable information of this message stream.
@@ -33,31 +26,27 @@ export interface MessageStream {
 
 /**
  * Base class for implementing a MessageStream.
- * Provides a unreadMessage queue.
+ * Provides an unreadMessage queue.
  */
-export abstract class BaseMessageStream implements MessageStream {
+export abstract class BaseMessageStream implements IMessageStream {
 	private static id = 0;
 
 	private readonly unreadMessages: Message[] = [];
 	private onMessageCallback: ((readMessage: Message) => void) | undefined;
 	protected readonly id = BaseMessageStream.id++;
 
-	private readonly onClosedDeferred = new Deferred();
-
-	/**
-	 * Is resolved when the stream closed.
-	 */
-	public readonly onClosed = this.onClosedDeferred.promise;
+	private readonly _isClosed = new ValueWithChangeEvent<boolean>(false);
+	public readonly isClosed = this._isClosed;
 
 	/**
 	 * Sets a callback for incoming messages.
 	 */
-	public setReadCallback(
-		callback: ((readMessage: Message) => void) | undefined
-	): void {
+	public setReadCallback(callback: ((readMessage: Message) => void) | undefined): void {
 		this.onMessageCallback = callback;
 
-		if (!callback) return;
+		if (!callback) {
+			return;
+		}
 
 		while (this.unreadMessages.length > 0) {
 			const msg = this.unreadMessages.shift()!;
@@ -91,37 +80,31 @@ export abstract class BaseMessageStream implements MessageStream {
 	 * Call this in derived classes to signal that the connection closed.
 	 */
 	protected onConnectionClosed(): void {
-		this.onClosedDeferred.resolve();
+		this._isClosed.value = true;
 	}
 }
 
 /**
  * Used by `StreamLogger` to log messages.
  */
-export interface MessageLogger {
-	log(
-		stream: MessageStream,
-		type: "incoming" | "outgoing",
-		message: Message
-	): void;
+export interface IMessageLogger {
+	log(stream: IMessageStream, type: "incoming" | "outgoing", message: Message): void;
 }
 
 /**
  * Intercepts a stream for logging.
  */
-export class StreamLogger implements MessageStream {
+export class StreamLogger implements IMessageStream {
 	constructor(
-		private readonly baseStream: MessageStream,
-		private readonly logger: MessageLogger
-	) {}
+		private readonly baseStream: IMessageStream,
+		private readonly logger: IMessageLogger
+	) { }
 
-	public get onClosed() {
-		return this.baseStream.onClosed;
+	public get isClosed(): IValueWithChangeEvent<boolean> {
+		return this.baseStream.isClosed;
 	}
 
-	public setReadCallback(
-		callback: ((readMessage: Message) => void) | undefined
-	) {
+	public setReadCallback(callback: ((readMessage: Message) => void) | undefined) {
 		if (callback === undefined) {
 			this.baseStream.setReadCallback(undefined);
 			return;
@@ -147,7 +130,7 @@ export class StreamLogger implements MessageStream {
  * Logs messages to a `RpcLogger`.
  */
 export class RpcStreamLogger extends StreamLogger {
-	constructor(baseStream: MessageStream, rpcLogger: RpcLogger) {
+	constructor(baseStream: IMessageStream, rpcLogger: RpcLogger) {
 		super(baseStream, {
 			log: (stream, type, message) => {
 				const char = type === "incoming" ? "<-" : "->";
@@ -166,7 +149,7 @@ export class RpcStreamLogger extends StreamLogger {
  * Logs messages to `console`.
  */
 export class ConsoleStreamLogger extends StreamLogger {
-	constructor(baseStream: MessageStream) {
+	constructor(baseStream: IMessageStream) {
 		super(baseStream, {
 			log: (stream, type, message) => {
 				const char = type === "incoming" ? "<-" : "->";

@@ -1,3 +1,4 @@
+import { constValue, IValueWithChangeEvent } from "./base";
 import {
 	RequestId,
 	ErrorObject,
@@ -7,10 +8,25 @@ import {
 } from "./JsonRpcTypes";
 
 /**
- * A channel has methods to send requests and notifications.
+ * Once a channel is constructed, it processes all incoming messages.
+ */
+export class Channel<TContext = void, TSenderContext = void> {
+	constructor(
+		public readonly connect: (listener: IRequestHandler<TContext> | undefined) => IRequestSender<TSenderContext>
+	) { }
+
+	public mapContext<TNewContext>(map: (context: TContext) => TNewContext): Channel<TNewContext, TSenderContext> {
+		return new Channel<TNewContext, TSenderContext>((listener) =>
+			this.connect(listener ? mapRequestHandlerContext(listener, map) : undefined)
+		);
+	}
+}
+
+/**
+ * A message sender has methods to send requests and notifications.
  * A request expects a response, a notification does not.
  */
-export interface Channel<TContext = void> {
+export interface IRequestSender<TContext = void> {
 	/**
 	 * Sends a request.
 	 * @param request - The request to send.
@@ -18,45 +34,33 @@ export interface Channel<TContext = void> {
 	 *  		The passed request id can be used to track the request.
 	 * @return A promise of the response. Fails if the request could not be delivered or if a response could not be received.
 	 */
-	sendRequest(
-		request: RequestObject,
-		context: TContext,
-		messageIdCallback?: (requestId: RequestId) => void
-	): Promise<ResponseObject>;
+	sendRequest(request: RequestObject, context: TContext, messageIdCallback?: (id: RequestId) => void): Promise<ResponseObject>;
 
 	/**
 	 * Sends a notification.
 	 * @return A promise that is fulfilled as soon as the notification has been sent successfully.
 	 *  	Fails if the notification could not be sent.
 	 */
-	sendNotification(
-		notification: RequestObject,
-		context: TContext
-	): Promise<void>;
+	sendNotification(notification: RequestObject, context: TContext): Promise<void>;
 
 	/**
 	 * Returns human readable information of this channel.
 	 */
 	toString(): string;
+
+	get isClosed(): IValueWithChangeEvent<boolean>;
 }
 
 /**
  * A request handler can handle requests and notifications.
  * Implementations must respond to all requests.
  */
-export interface RequestHandler<TContext = void> {
+export interface IRequestHandler<TContext = void> {
 	/**
 	 * Handles an incoming request.
 	 */
-	handleRequest(
-		request: RequestObject,
-		requestId: RequestId,
-		context: TContext
-	): Promise<ResponseObject>;
-	handleNotification(
-		request: RequestObject,
-		context: TContext
-	): Promise<void>;
+	handleRequest(request: RequestObject, requestId: RequestId, context: TContext): Promise<ResponseObject>;
+	handleNotification(request: RequestObject, context: TContext): Promise<void>;
 }
 
 /**
@@ -75,49 +79,19 @@ export interface RequestObject {
  * The result of a request.
  */
 export type ResponseObject =
-	| {
-			result: JSONValue;
-	  }
-	| {
-			error: ErrorObject;
-	  };
+	| { result: JSONValue }
+	| { error: ErrorObject };
 
-/**
- * A factory for `Channel`s.
- * Is used to delay setting a `RequestHandler`.
- * Once a channel is constructed, it processes all incoming messages.
- */
-export class ChannelFactory<TContext = void, TChannelContext = void> {
-	constructor(
-		public readonly createChannel: (
-			listener: RequestHandler<TContext> | undefined
-		) => Channel<TChannelContext>
-	) {}
-
-	public mapContext<TNewContext>(
-		map: (context: TContext) => TNewContext
-	): ChannelFactory<TNewContext, TChannelContext> {
-		return new ChannelFactory<TNewContext, TChannelContext>((listener) =>
-			this.createChannel(
-				listener ? mapRequestHandlerContext(listener, map) : undefined
-			)
-		);
-	}
-}
 
 /**
  * Implements a channel that directly forwards the requests to the given request handler.
  */
-export class LoopbackChannel<TContext> implements Channel<TContext> {
+export class LoopbackChannel<TContext> implements IRequestSender<TContext> {
 	private id: number = 0;
 
-	constructor(private readonly requestHandler: RequestHandler<TContext>) {}
+	constructor(private readonly requestHandler: IRequestHandler<TContext>) { }
 
-	public sendRequest(
-		request: RequestObject,
-		context: TContext,
-		messageIdCallback?: (requestId: RequestId) => void
-	): Promise<ResponseObject> {
+	public sendRequest(request: RequestObject, context: TContext, messageIdCallback?: (id: RequestId) => void): Promise<ResponseObject> {
 		const curId = this.id++;
 		if (messageIdCallback) {
 			messageIdCallback(curId);
@@ -125,40 +99,40 @@ export class LoopbackChannel<TContext> implements Channel<TContext> {
 		return this.requestHandler.handleRequest(request, curId, context);
 	}
 
-	public sendNotification(
-		notification: RequestObject,
-		context: TContext
-	): Promise<void> {
+	public sendNotification(notification: RequestObject, context: TContext): Promise<void> {
 		return this.requestHandler.handleNotification(notification, context);
 	}
 
 	public toString(): string {
 		return "Loopback";
 	}
+
+	public readonly isClosed = constValue(false);
 }
 
-export function mapChannelContext<TContext, TNewContext>(
-	channel: Channel<TContext>,
+export function mapMessageSenderContext<TContext, TNewContext>(
+	messageSender: IRequestSender<TContext>,
 	map: (context: TNewContext) => TContext
-): Channel<TNewContext> {
+): IRequestSender<TNewContext> {
 	return {
 		sendNotification: (notification, context) =>
-			channel.sendNotification(notification, map(context)),
+			messageSender.sendNotification(notification, map(context)),
 		sendRequest: (request, context, messageIdCallback) =>
-			channel.sendRequest(request, map(context), messageIdCallback),
+			messageSender.sendRequest(request, map(context), messageIdCallback),
 
-		toString: () => channel.toString(),
+		toString: () => messageSender.toString(),
+		isClosed: messageSender.isClosed,
 	};
 }
 
 export function mapRequestHandlerContext<TContext, TNewContext>(
-	requestHandler: RequestHandler<TContext>,
+	messageHandler: IRequestHandler<TContext>,
 	map: (context: TNewContext) => TContext
-): RequestHandler<TNewContext> {
+): IRequestHandler<TNewContext> {
 	return {
 		handleNotification: (request, context) =>
-			requestHandler.handleNotification(request, map(context)),
+			messageHandler.handleNotification(request, map(context)),
 		handleRequest: (request, requestId, context) =>
-			requestHandler.handleRequest(request, requestId, map(context)),
+			messageHandler.handleRequest(request, requestId, map(context)),
 	};
 }

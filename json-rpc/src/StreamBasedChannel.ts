@@ -1,36 +1,21 @@
-import {
-	Message,
-	isRequestOrNotification,
-	ResponseMessage,
-	RequestMessage,
-	ErrorCode,
-	RequestId,
-} from "./JsonRpcTypes";
-import {
-	Channel,
-	RequestHandler,
-	ResponseObject,
-	RequestObject,
-	ChannelFactory,
-} from "./Channel";
-import { MessageStream } from "./MessageStream";
+import { Channel, IRequestHandler, IRequestSender, RequestObject, ResponseObject } from "./Channel";
+import { ErrorCode, IRequestMessage, IResponseMessage, Message, RequestId, isRequestOrNotification } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
+import { IMessageStream } from "./MessageStream";
+import { IValueWithChangeEvent } from "./base";
 
 /**
  * Implements a channel through a stream and an optional request handler to handle incoming requests.
  */
-export class StreamBasedChannel implements Channel {
+export class StreamBasedChannel implements IRequestSender {
 	/**
 	 * Creates a channel factory from a given stream and logger.
 	 * This allows to delay specifying a `RequestHandler`.
 	 * Once the channel is created, it processes incoming messages.
 	 */
-	public static getFactory(
-		stream: MessageStream,
-		logger: RpcLogger | undefined
-	): ChannelFactory {
+	public static createChannel(stream: IMessageStream, logger: RpcLogger | undefined): Channel {
 		let constructed = false;
-		return new ChannelFactory((listener) => {
+		return new Channel((listener) => {
 			if (constructed) {
 				throw new Error(
 					`A channel to the stream ${stream} was already constructed!`
@@ -42,145 +27,149 @@ export class StreamBasedChannel implements Channel {
 		});
 	}
 
-	private readonly unprocessedResponses = new Map<
-		string,
-		(response: ResponseMessage) => void
-	>();
-	private lastUsedRequestId = 0;
+	private readonly _unprocessedResponses = new Map<string, (response: IResponseMessage) => void>();
+	private _lastUsedRequestId = 0;
 
 	constructor(
-		private readonly stream: MessageStream,
-		private readonly listener: RequestHandler | undefined,
-		private readonly logger: RpcLogger | undefined
+		private readonly _stream: IMessageStream,
+		private readonly _listener: IRequestHandler | undefined,
+		private readonly _logger: RpcLogger | undefined
 	) {
-		this.stream.setReadCallback((message) => {
+		this._stream.setReadCallback((message) => {
 			if (isRequestOrNotification(message)) {
-				this.processRequestOrNotification(message);
+				if (message.id === undefined) {
+					this._processNotification(message);
+				} else {
+					this._processRequest(message);
+				}
 			} else {
-				this.processResponse(message);
+				this._processResponse(message);
 			}
 		});
 	}
 
-	private async processRequestOrNotification(
-		message: RequestMessage
-	): Promise<void> {
-		if (message.id === undefined) {
-			if (!this.listener) {
-				if (this.logger) {
-					this.logger.debug({
-						text: "Notification ignored",
-						message,
-					});
-				}
-				return;
-			}
+	get isClosed(): IValueWithChangeEvent<boolean> {
+		return this._stream.isClosed;
+	}
 
-			try {
-				await this.listener.handleNotification({
-					method: message.method,
-					params: message.params || null,
+	private async _processNotification(message: IRequestMessage): Promise<void> {
+		if (message.id !== undefined) { throw new Error(); }
+
+		if (!this._listener) {
+			if (this._logger) {
+				this._logger.debug({
+					text: "Notification ignored",
+					message,
 				});
-			} catch (exception) {
-				if (this.logger) {
-					this.logger.warn({
-						text: `Exception was thrown while handling notification: ${exception.toString()}`,
-						exception,
-						message,
-					});
-				}
 			}
-		} else {
-			let result: ResponseObject;
-			if (this.listener) {
-				try {
-					result = await this.listener.handleRequest(
-						{
-							method: message.method,
-							params: message.params || null,
-						},
-						message.id
-					);
-				} catch (exception) {
-					if (this.logger) {
-						this.logger.warn({
-							text: `Exception was thrown while handling request: ${exception.toString()}`,
-							message,
-							exception,
-						});
-					}
-					// do not leak exception details to client as it could contain sensitive information.
-					result = {
-						error: {
-							code: ErrorCode.internalError,
-							message: "An unexpected exception was thrown.",
-							data: undefined,
-						},
-					};
-				}
-			} else {
-				if (this.logger) {
-					this.logger.debug({
-						text:
-							"Received request even though not listening for requests",
+			return;
+		}
+
+		try {
+			await this._listener.handleNotification({
+				method: message.method,
+				params: message.params || null,
+			});
+		} catch (exception) {
+			if (this._logger) {
+				this._logger.warn({
+					text: `Exception was thrown while handling notification: ${exception}`,
+					exception,
+					message,
+				});
+			}
+		}
+	}
+
+	private async _processRequest(message: IRequestMessage): Promise<void> {
+		if (message.id === undefined) { throw new Error(); }
+
+		let result: ResponseObject;
+		if (this._listener) {
+			try {
+				result = await this._listener.handleRequest(
+					{
+						method: message.method,
+						params: message.params || null,
+					},
+					message.id
+				);
+			} catch (exception) {
+				if (this._logger) {
+					this._logger.warn({
+						text: `Exception was thrown while handling request: ${exception}`,
 						message,
+						exception,
 					});
 				}
+				// do not leak exception details to client as it could contain sensitive information.
 				result = {
 					error: {
-						code: ErrorCode.methodNotFound,
-						message:
-							"This endpoint does not listen for requests or notifications.",
+						code: ErrorCode.internalError,
+						message: "An unexpected exception was thrown.",
 						data: undefined,
 					},
 				};
 			}
-			let responseMsg: ResponseMessage;
-			if ("result" in result) {
-				responseMsg = {
-					jsonrpc: "2.0",
-					id: message.id,
-					result: result.result,
-				};
-			} else {
-				responseMsg = {
-					jsonrpc: "2.0",
-					id: message.id,
-					error: result.error,
-				};
+		} else {
+			if (this._logger) {
+				this._logger.debug({
+					text:
+						"Received request even though not listening for requests",
+					message,
+				});
 			}
-			await this.stream.write(responseMsg);
+			result = {
+				error: {
+					code: ErrorCode.methodNotFound,
+					message:
+						"This endpoint does not listen for requests or notifications.",
+					data: undefined,
+				},
+			};
 		}
+		let responseMsg: IResponseMessage;
+		if ("result" in result) {
+			responseMsg = {
+				jsonrpc: "2.0",
+				id: message.id,
+				result: result.result,
+			};
+		} else {
+			responseMsg = {
+				jsonrpc: "2.0",
+				id: message.id,
+				error: result.error,
+			};
+		}
+		await this._stream.write(responseMsg);
+
 	}
 
-	private processResponse(message: ResponseMessage): void {
+	private _processResponse(message: IResponseMessage): void {
 		const strId = "" + message.id;
-		const callback = this.unprocessedResponses.get(strId);
+		const callback = this._unprocessedResponses.get(strId);
 		if (!callback) {
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: "Got an unexpected response message",
 					message,
 				});
 			}
 			return;
 		}
-		this.unprocessedResponses.delete(strId);
+		this._unprocessedResponses.delete(strId);
 		callback(message);
 	}
 
-	private newRequestId(): RequestId {
-		return this.lastUsedRequestId++;
+	private _newRequestId(): RequestId {
+		return this._lastUsedRequestId++;
 	}
 
-	public sendRequest(
-		request: RequestObject,
-		context: void,
-		messageIdCallback?: (requestId: RequestId) => void
-	): Promise<ResponseObject> {
+	public sendRequest(request: RequestObject, _context: void, messageIdCallback?: (requestId: RequestId) => void): Promise<ResponseObject> {
 		const message: Message = {
 			jsonrpc: "2.0",
-			id: this.newRequestId(),
+			id: this._newRequestId(),
 			method: request.method,
 			params: request.params || undefined,
 		};
@@ -191,7 +180,7 @@ export class StreamBasedChannel implements Channel {
 
 		return new Promise<ResponseObject>((resolve, reject) => {
 			const strId = "" + message.id;
-			this.unprocessedResponses.set(strId, (response) => {
+			this._unprocessedResponses.set(strId, (response) => {
 				if ("result" in response) {
 					resolve({ result: response.result! });
 				} else {
@@ -206,28 +195,25 @@ export class StreamBasedChannel implements Channel {
 				}
 			});
 
-			this.stream.write(message).then(undefined, (reason) => {
+			this._stream.write(message).then(undefined, (reason) => {
 				// Assuming no response will ever be sent as sending failed.
-				this.unprocessedResponses.delete(strId);
+				this._unprocessedResponses.delete(strId);
 				reject(reason);
 			});
 		});
 	}
 
-	public sendNotification(
-		notification: RequestObject,
-		context: void
-	): Promise<void> {
+	public sendNotification(notification: RequestObject, context: void): Promise<void> {
 		const msg: Message = {
 			jsonrpc: "2.0",
 			id: undefined,
 			method: notification.method,
 			params: notification.params || undefined,
 		};
-		return this.stream.write(msg);
+		return this._stream.write(msg);
 	}
 
 	public toString(): string {
-		return "StreamChannel/" + this.stream.toString();
+		return "StreamChannel/" + this._stream.toString();
 	}
 }

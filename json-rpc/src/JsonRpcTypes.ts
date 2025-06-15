@@ -1,21 +1,25 @@
-import * as semanticJson from "@hediet/semantic-json";
-
 // These types model the JSON RPC 2.0 Specification (see https://www.jsonrpc.org/specification).
 
-export function isRequestOrNotification(msg: Message): msg is RequestMessage {
+export function isRequestOrNotification(msg: Message): msg is IRequestMessage {
 	return (msg as any).method !== undefined;
 }
 
-export type JSONValue = semanticJson.JSONValue;
-export type JSONObject = semanticJson.JSONObject;
-export type JSONArray = semanticJson.JSONArray;
+export type JSONObject = { [key: string]: JSONValue | undefined };
+export interface JSONArray extends Array<JSONValue> { }
+export type JSONValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JSONObject
+	| JSONArray;
 
-export type Message = RequestMessage | ResponseMessage;
+export type Message = IRequestMessage | IResponseMessage;
 
 /**
  * Represents a request or a notification.
  */
-export interface RequestMessage {
+export interface IRequestMessage {
 	jsonrpc: "2.0";
 	/**  must not match `rpc\..*` */
 	method: string;
@@ -31,7 +35,7 @@ export type RequestId = number | string;
 /**
  * Either result or error is set.
  */
-export interface ResponseMessage {
+export interface IResponseMessage {
 	jsonrpc: "2.0";
 	/**
 	 * This member is REQUIRED on success.
@@ -71,9 +75,9 @@ export namespace ErrorObject {
 	}
 }
 
-export interface ErrorCode extends Number {}
+export interface ErrorCode extends Number { }
 
-export module ErrorCode {
+export namespace ErrorCode {
 	/**
 	 * Invalid JSON was received by the server.
 	 * An error occurred on the server while parsing the JSON text.

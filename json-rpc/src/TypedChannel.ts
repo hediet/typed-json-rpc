@@ -1,28 +1,9 @@
-import {
-	Serializer,
-	sAny,
-	sObject,
-	BaseSerializer,
-	sNull,
-	DeserializeContext,
-	sOpenObject,
-} from "@hediet/semantic-json";
+import { Serializer, sAny, sObject, BaseSerializer, sNull, DeserializeContext } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
-import {
-	Channel,
-	ChannelFactory,
-	RequestObject,
-	ResponseObject,
-} from "./Channel";
-import {
-	RequestId,
-	ErrorCode,
-	JSONValue,
-	JSONArray,
-	JSONObject,
-} from "./JsonRpcTypes";
+import { IRequestSender, Channel, RequestObject, ResponseObject } from "./Channel";
+import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
-import { MessageStream } from "./MessageStream";
+import { IMessageStream } from "./MessageStream";
 import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "./StreamBasedChannel";
@@ -52,12 +33,8 @@ export abstract class TypedChannelBase<TContext, TSendContext> {
 	): Disposable;
 
 	public contextualize<TNewContext, TNewSendContext>(args: {
-		getNewContext: (
-			context: TContext
-		) => Promise<TNewContext> | TNewContext;
-		getSendContext: (
-			newSendContext: TNewSendContext
-		) => Promise<TSendContext> | TSendContext;
+		getNewContext: (context: TContext) => Promise<TNewContext> | TNewContext;
+		getSendContext: (newSendContext: TNewSendContext) => Promise<TSendContext> | TSendContext;
 	}): TypedChannelBase<TNewContext, TNewSendContext> {
 		return new ContextualizedTypedChannel(this, args);
 	}
@@ -150,64 +127,52 @@ export interface TypedChannelOptions {
  * and to start processing all incoming messages.
  * At this point, all request and notification handlers should be registered.
  */
-export class TypedChannel<
-	TContext = void,
-	TSendContext = void
-> extends TypedChannelBase<TContext, TSendContext> {
-	public static fromStream(
-		stream: MessageStream,
-		options: TypedChannelOptions = {}
-	): TypedChannel {
-		const channelFactory = StreamBasedChannel.getFactory(
-			stream,
-			options.logger
-		);
+export class TypedChannel<TContext = void, TSendContext = void> extends TypedChannelBase<TContext, TSendContext> {
+	public static fromStream(stream: IMessageStream, options: TypedChannelOptions = {}): TypedChannel {
+		const channelFactory = StreamBasedChannel.createChannel(stream, options.logger);
 		return new TypedChannel(channelFactory, options);
 	}
 
-	private channel: Channel<TSendContext> | undefined = undefined;
-	private readonly handler = new Map<
+	private _channel: IRequestSender<TSendContext> | undefined = undefined;
+	private readonly _handler = new Map<
 		string,
 		| RegisteredRequestHandler<any, any, any, TContext>
 		| RegisteredNotificationHandler<any, TContext>
 	>();
-	private readonly unknownNotificationHandler = new Set<
+	private readonly _unknownNotificationHandler = new Set<
 		(notification: RequestObject) => void
 	>();
-	private timeout: Disposable | undefined;
+	private _timeout: Disposable | undefined;
 	public sendExceptionDetails: boolean = false;
 
-	private readonly logger: RpcLogger | undefined;
-	private readonly ignoreUnexpectedPropertiesInResponses: boolean;
+	private readonly _logger: RpcLogger | undefined;
+	private readonly _ignoreUnexpectedPropertiesInResponses: boolean;
 
 	constructor(
-		private readonly channelCtor: ChannelFactory<TContext, TSendContext>,
+		private readonly channelCtor: Channel<TContext, TSendContext>,
 		options: TypedChannelOptions = {}
 	) {
 		super();
-		this.logger = options.logger;
-		this.ignoreUnexpectedPropertiesInResponses = !!options.ignoreUnexpectedPropertiesInResponses;
+		this._logger = options.logger;
+		this._ignoreUnexpectedPropertiesInResponses = !!options.ignoreUnexpectedPropertiesInResponses;
 		this.sendExceptionDetails = !!options.sendExceptionDetails;
-		if (process.env.NODE_ENV !== "production") {
-			this.timeout = startTimeout(1000, () => {
-				if (!this.channel) {
-					console.warn(
-						`"${this.startListen.name}" has not been called within 1 second after construction of this channel. ` +
-							`Did you forget to call it?`,
-						this
-					);
-				}
-			});
-		}
+
+		this._timeout = startTimeout(1000, () => {
+			if (!this._channel) {
+				console.warn(
+					`"${this.startListen.name}" has not been called within 1 second after construction of this channel. ` +
+					`Did you forget to call it?`,
+					this
+				);
+			}
+		});
 	}
 
 	private listeningDeferred = new Deferred();
 	public onListening: Promise<void> = this.listeningDeferred.promise;
 
-	private readonly requestDidErrorEventEmitter = new EventEmitter<{
-		error: RequestHandlingError;
-	}>();
-	public readonly onRequestDidError = this.requestDidErrorEventEmitter.asEvent();
+	private readonly _requestDidErrorEventEmitter = new EventEmitter<{ error: RequestHandlingError; }>();
+	public readonly onRequestDidError = this._requestDidErrorEventEmitter.asEvent();
 
 	/**
 	 * This method must be called to forward messages from the stream to this channel.
@@ -215,16 +180,16 @@ export class TypedChannel<
 	 * can be setup properly before handling messages.
 	 */
 	public startListen(): void {
-		if (this.channel) {
+		if (this._channel) {
 			throw new Error(
 				`"${this.startListen.name}" can be called only once, but it already has been called.`
 			);
 		}
-		if (this.timeout) {
-			this.timeout.dispose();
-			this.timeout = undefined;
+		if (this._timeout) {
+			this._timeout.dispose();
+			this._timeout = undefined;
 		}
-		this.channel = this.channelCtor.createChannel({
+		this._channel = this.channelCtor.connect({
 			handleRequest: (req, id, context) =>
 				this.handleRequest(req, id, context),
 			handleNotification: (req, context) =>
@@ -235,8 +200,8 @@ export class TypedChannel<
 	}
 
 	private checkChannel(
-		channel: Channel<TSendContext> | undefined
-	): channel is Channel<TSendContext> {
+		channel: IRequestSender<TSendContext> | undefined
+	): channel is IRequestSender<TSendContext> {
 		if (!channel) {
 			throw new Error(
 				`"${this.startListen.name}" must be called before any messages can be sent or received.`
@@ -250,19 +215,19 @@ export class TypedChannel<
 		requestId: RequestId,
 		context: TContext
 	): Promise<ResponseObject> {
-		const handler = this.handler.get(request.method) as
+		const handler = this._handler.get(request.method) as
 			| RegisteredRequestHandler<
-					{ brand: "params" },
-					{ brand: "result" },
-					{ brand: "error" },
-					TContext
-			  >
+				{ brand: "params" },
+				{ brand: "result" },
+				{ brand: "error" },
+				TContext
+			>
 			| RegisteredNotificationHandler<{ brand: "params" }, TContext>
 			| undefined;
 
 		if (!handler) {
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: `No request handler for "${request.method}".`,
 					data: { requestObject: request },
 				});
@@ -280,8 +245,8 @@ export class TypedChannel<
 		if (handler.kind != "request") {
 			const message = `"${request.method}" is registered as notification, but was sent as request.`;
 
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: message,
 					data: { requestObject: request },
 				});
@@ -302,8 +267,8 @@ export class TypedChannel<
 		if (decodeResult.hasErrors) {
 			const message = `Got invalid params: ${decodeResult.formatError()}`;
 
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: message,
 					data: {
 						requestObject: request,
@@ -331,8 +296,8 @@ export class TypedChannel<
 				if ("error" in result || "errorMessage" in result) {
 					const errorData = result.error
 						? handler.requestType.errorSerializer.serialize(
-								result.error
-						  )
+							result.error
+						)
 						: undefined;
 
 					const code =
@@ -364,9 +329,9 @@ export class TypedChannel<
 						},
 					};
 				} else {
-					if (this.logger) {
-						this.logger.warn({
-							text: `An exception was thrown while handling a request: ${exception.toString()}.`,
+					if (this._logger) {
+						this._logger.warn({
+							text: `An exception was thrown while handling a request: ${exception}.`,
 							exception,
 							data: { requestObject: request },
 						});
@@ -375,7 +340,7 @@ export class TypedChannel<
 						error: {
 							code: ErrorCode.unexpectedServerError,
 							message: this.sendExceptionDetails
-								? `An exception was thrown while handling a request: ${exception.toString()}.`
+								? `An exception was thrown while handling a request: ${exception}.`
 								: "Server has thrown an unexpected exception",
 						},
 					};
@@ -389,14 +354,14 @@ export class TypedChannel<
 		request: RequestObject,
 		context: TContext
 	): Promise<void> {
-		const handler = this.handler.get(request.method);
+		const handler = this._handler.get(request.method);
 		if (!handler) {
-			for (const h of this.unknownNotificationHandler) {
+			for (const h of this._unknownNotificationHandler) {
 				h(request);
 			}
-			if (this.unknownNotificationHandler.size === 0) {
-				if (this.logger) {
-					this.logger.debug({
+			if (this._unknownNotificationHandler.size === 0) {
+				if (this._logger) {
+					this._logger.debug({
 						text: `Unhandled notification "${request.method}"`,
 						data: { requestObject: request },
 					});
@@ -406,8 +371,8 @@ export class TypedChannel<
 		}
 
 		if (handler.kind != "notification") {
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: `"${request.method}" is registered as request, but was sent as notification.`,
 					data: { requestObject: request },
 				});
@@ -417,7 +382,7 @@ export class TypedChannel<
 			return;
 		}
 
-		const deserializeContext = this.ignoreUnexpectedPropertiesInResponses
+		const deserializeContext = this._ignoreUnexpectedPropertiesInResponses
 			? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
 			: DeserializeContext.default;
 		const decodeResult = handler.notificationType.paramsSerializer.deserialize(
@@ -425,8 +390,8 @@ export class TypedChannel<
 			deserializeContext
 		);
 		if (decodeResult.hasErrors) {
-			if (this.logger) {
-				this.logger.debug({
+			if (this._logger) {
+				this._logger.debug({
 					text: `Got invalid params: ${decodeResult.formatError()}`,
 					data: {
 						requestObject: request,
@@ -444,9 +409,9 @@ export class TypedChannel<
 			try {
 				handlerFunc(val, context);
 			} catch (exception) {
-				if (this.logger) {
-					this.logger.warn({
-						text: `An exception was thrown while handling a notification: ${exception.toString()}.`,
+				if (this._logger) {
+					this._logger.warn({
+						text: `An exception was thrown while handling a notification: ${exception}.`,
 						exception,
 						data: { requestObject: request },
 					});
@@ -458,21 +423,21 @@ export class TypedChannel<
 	public registerUnknownNotificationHandler(
 		handler: (notification: RequestObject) => void
 	): Disposable {
-		return setAndDeleteOnDispose(this.unknownNotificationHandler, handler);
+		return setAndDeleteOnDispose(this._unknownNotificationHandler, handler);
 	}
 
 	public registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
 		handler: RequestHandlerFunc<TArgs, TResponse, TError, TContext>
 	): Disposable {
-		const registeredHandler = this.handler.get(requestType.method);
+		const registeredHandler = this._handler.get(requestType.method);
 		if (registeredHandler) {
 			throw new Error(
 				`Handler with method "${requestType.method}" already registered.`
 			);
 		}
 
-		return setAndDeleteOnDispose(this.handler, requestType.method, {
+		return setAndDeleteOnDispose(this._handler, requestType.method, {
 			kind: "request",
 			requestType,
 			handler,
@@ -483,14 +448,14 @@ export class TypedChannel<
 		type: NotificationType<TArgs>,
 		handler: NotificationHandlerFunc<TArgs, TContext>
 	): Disposable {
-		let registeredHandler = this.handler.get(type.method);
+		let registeredHandler = this._handler.get(type.method);
 		if (!registeredHandler) {
 			registeredHandler = {
 				kind: "notification",
 				notificationType: type,
 				handlers: new Set(),
 			};
-			this.handler.set(type.method, registeredHandler);
+			this._handler.set(type.method, registeredHandler);
 		} else {
 			if (registeredHandler.kind !== "notification") {
 				throw new Error(
@@ -509,7 +474,7 @@ export class TypedChannel<
 
 	public getRegisteredTypes(): Array<RequestType | NotificationType> {
 		const result = [];
-		for (const h of this.handler.values()) {
+		for (const h of this._handler.values()) {
 			if (h.kind === "notification") {
 				result.push(h.notificationType);
 			} else if (h.kind === "request") {
@@ -524,7 +489,7 @@ export class TypedChannel<
 		args: TParams,
 		context: TSendContext
 	): Promise<TResponse> {
-		if (!this.checkChannel(this.channel)) {
+		if (!this.checkChannel(this._channel)) {
 			throw new Error("Impossible");
 		}
 
@@ -532,13 +497,13 @@ export class TypedChannel<
 
 		assertObjectArrayOrNull(params);
 
-		if (this.ignoreUnexpectedPropertiesInResponses) {
+		if (this._ignoreUnexpectedPropertiesInResponses) {
 			if (typeof params === "object" && params !== null) {
 				(params as any)["$ignoreUnexpectedProperties"] = true;
 			}
 		}
 
-		const response = await this.channel.sendRequest(
+		const response = await this._channel.sendRequest(
 			{
 				method: requestType.method,
 				params,
@@ -565,11 +530,11 @@ export class TypedChannel<
 				errorData,
 				response.error.code
 			);
-			this.requestDidErrorEventEmitter.emit({ error });
+			this._requestDidErrorEventEmitter.emit({ error });
 			throw error;
 		} else {
 			const deserializeContext = this
-				.ignoreUnexpectedPropertiesInResponses
+				._ignoreUnexpectedPropertiesInResponses
 				? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
 				: DeserializeContext.default;
 			const result = requestType.resultSerializer.deserialize(
@@ -589,7 +554,7 @@ export class TypedChannel<
 		params: TParams,
 		context: TSendContext
 	): Promise<void> {
-		if (!this.checkChannel(this.channel)) {
+		if (!this.checkChannel(this._channel)) {
 			throw "";
 		}
 
@@ -598,13 +563,13 @@ export class TypedChannel<
 		);
 
 		assertObjectArrayOrNull(encodedParams);
-		if (this.ignoreUnexpectedPropertiesInResponses) {
+		if (this._ignoreUnexpectedPropertiesInResponses) {
 			if (typeof params === "object" && params !== null) {
 				(params as any)["$ignoreUnexpectedProperties"] = true;
 			}
 		}
 
-		this.channel.sendNotification(
+		this._channel.sendNotification(
 			{
 				method: notificationType.method,
 				params: encodedParams,
@@ -615,7 +580,7 @@ export class TypedChannel<
 
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {
 
-    }*/
+	}*/
 }
 
 function assertObjectArrayOrNull(
@@ -636,15 +601,15 @@ export interface OkResult<TOk> {
 
 export type ErrorResult<TError> =
 	| {
-			error: TError;
-			errorMessage?: string;
-			errorCode?: ErrorCode;
-	  }
+		error: TError;
+		errorMessage?: string;
+		errorCode?: ErrorCode;
+	}
 	| {
-			error?: TError;
-			errorMessage: string;
-			errorCode?: ErrorCode;
-	  };
+		error?: TError;
+		errorMessage: string;
+		errorCode?: ErrorCode;
+	};
 
 export type RequestHandlerFunc<TArg, TResult, TError, TContext> = (
 	arg: TArg,
@@ -699,7 +664,7 @@ export class RequestType<
 		public readonly paramsSerializer: BaseSerializer<TParams>,
 		public readonly resultSerializer: BaseSerializer<TResponse>,
 		public readonly errorSerializer: BaseSerializer<TError>
-	) {}
+	) { }
 
 	public withMethod(
 		method: string
@@ -722,7 +687,7 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 	constructor(
 		public readonly method: TMethod,
 		public readonly paramsSerializer: Serializer<TParams>
-	) {}
+	) { }
 
 	public withMethod(method: string): NotificationType<TParams, string> {
 		return new NotificationType(method, this.paramsSerializer);

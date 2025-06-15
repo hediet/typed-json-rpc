@@ -18,8 +18,7 @@
 		"build": "tsc"
 	},
 	"dependencies": {
-		"@hediet/std": "^0.6.0",
-		"@hediet/semantic-json": "^0.4.1"
+		"@hediet/std": "^0.6.0"
 	},
 	"devDependencies": {
 		"typescript": "^3.9.2"
