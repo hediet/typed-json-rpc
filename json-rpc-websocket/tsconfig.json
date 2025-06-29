@@ -1,7 +1,8 @@
 {
-    "extends": "../tsconfig.settings.json",
-    "compilerOptions": {
-        "outDir": "./dist",
-        "rootDir": "./src",
-    }
+	"extends": "../tsconfig.settings.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"skipLibCheck": true
+	}
 }

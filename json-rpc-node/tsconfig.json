@@ -2,7 +2,8 @@
 	"extends": "../tsconfig.settings.json",
 	"compilerOptions": {
 		"outDir": "./dist",
-		"sourceRoot": "."
+		"sourceRoot": ".",
+		"skipLibCheck": true
 	},
 	"include": ["./src/**/*", "./test/**/*"]
 }

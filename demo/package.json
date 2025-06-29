@@ -13,7 +13,8 @@
 		"@hediet/json-rpc": "*",
 		"@hediet/json-rpc-browser": "*",
 		"@hediet/json-rpc-websocket": "*",
-		"@hediet/json-rpc-websocket-server": "*"
+		"@hediet/json-rpc-websocket-server": "*",
+		"zod": "^3.25.64"
 	},
 	"devDependencies": {
 		"@types/html-webpack-plugin": "^3.2.2",
@@ -25,6 +26,6 @@
 		"webpack": "^5.24.3",
 		"webpack-cli": "^4.5.0",
 		"webpack-dev-server": "^3.11.2",
-		"typescript": "^4.2.3"
+		"typescript": "^5.8.3"
 	}
 }

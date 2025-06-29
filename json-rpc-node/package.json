@@ -1,5 +1,5 @@
 {
-	"name": "@hediet/json-rpc-streams",
+	"name": "@hediet/json-rpc-node",
 	"description": "Provides a NodeJS Stream to MessageStream adapter. Enables RPC calls through StdIn/StdOut",
 	"version": "0.3.0",
 	"author": {

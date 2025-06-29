@@ -82,6 +82,10 @@ export abstract class BaseMessageStream implements IMessageStream {
 	protected onConnectionClosed(): void {
 		this._isClosed.value = true;
 	}
+
+	public log(logger?: IMessageLogger): IMessageStream {
+		return new StreamLogger(this, logger ?? new ConsoleMessageLogger());
+	}
 }
 
 /**
@@ -150,13 +154,13 @@ export class RpcStreamLogger extends StreamLogger {
  */
 export class ConsoleStreamLogger extends StreamLogger {
 	constructor(baseStream: IMessageStream) {
-		super(baseStream, {
-			log: (stream, type, message) => {
-				const char = type === "incoming" ? "<-" : "->";
-				console.log(
-					`${char} [${stream.toString()}] ${JSON.stringify(message)}`
-				);
-			},
-		});
+		super(baseStream, new ConsoleMessageLogger());
+	}
+}
+
+export class ConsoleMessageLogger implements IMessageLogger {
+	log(stream: IMessageStream, type: "incoming" | "outgoing", message: Message): void {
+		const char = type === "incoming" ? "<-" : "->";
+		console.log(`${char} [${stream.toString()}] ${JSON.stringify(message)}`);
 	}
 }

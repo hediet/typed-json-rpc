@@ -46,3 +46,65 @@ async function main() {
 main();
 
 */
+
+import { requestType } from "@hediet/json-rpc";
+import { ISerializer, SerializerOf } from "@hediet/json-rpc/src/schema";
+import { z } from "zod";
+
+declare global {
+	export interface JsonRpcSerializerMapper<T> {
+		zod2(val: T): T extends (z.ZodType<infer TResult>) ? ISerializer<TResult> : undefined;
+	}
+}
+
+
+const schema = z.object({ foo: z.string() });
+
+type T = typeof schema;
+type T2 = SerializerOf<T>;
+type T3 = SerializerOf<ISerializer<string>>;
+
+const x = requestType({});
+x
+
+
+
+
+/*interface SerializerMapper {
+	(value: string): IContainer<string>;
+}*/
+
+/*interface SerializerMapper {
+	<U>(value: z.ZodType<U>): IContainer<U>;
+}
+
+
+interface IContainer<T> {
+	value: T;
+}
+
+type SerializerOf<T> = SerializerMapper extends (arg: T) => infer R ? R : never;
+
+
+function toSerializer<T>(s: T): SerializerOf<T> {
+	throw new Error("Not implemented");
+}
+
+const s1 = toSerializer(z.object({ foo: z.string() }));
+s1.value; // this is unknown
+
+
+
+s1.deserializeFromJson(null!).value?.foo;
+
+const c = contract({
+	name: "c",
+	server: {
+		query_packages: requestType({
+			params: z.object({ foo: z.string() }),
+			result: z.array(z.string()),
+		}),
+	},
+	client: {},
+});
+c.getServer(null!).server.query_packages({})*/

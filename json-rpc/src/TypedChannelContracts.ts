@@ -2,6 +2,7 @@ import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandle
 import { RequestId } from "./JsonRpcTypes";
 import { IMessageStream } from "./MessageStream";
 import { Disposable } from "@hediet/std/disposable";
+import { SerializerT } from "./schema";
 
 /**
  * Describes a request type as part of a `Contract`.
@@ -33,11 +34,11 @@ export type AsOneSideContract<T extends OneSideContract> = T;
 export type ContractToRequest<TRequestMap extends OneSideContract> = {
 	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 	? RequestType<
-		TRequestMap[TRequest]["paramsSerializer"]["T"],
-		TRequestMap[TRequest]["resultSerializer"]["T"],
-		TRequestMap[TRequest]["errorSerializer"]["T"]
+		SerializerT<TRequestMap[TRequest]["paramsSerializer"]>,
+		SerializerT<TRequestMap[TRequest]["resultSerializer"]>,
+		SerializerT<TRequestMap[TRequest]["errorSerializer"]>
 	>
-	: NotificationType<TRequestMap[TRequest]["paramsSerializer"]["T"]>;
+	: NotificationType<SerializerT<TRequestMap[TRequest]["paramsSerializer"]>>;
 };
 
 export type EmptyObjectToVoid<T> = {} extends T ? void | T : T;
@@ -49,13 +50,13 @@ export type ContractInterfaceOf<
 		[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
 		? (
 			arg: EmptyObjectToVoid<
-				TRequestMap[TRequest]["paramsSerializer"]["T"]
+				SerializerT<TRequestMap[TRequest]["paramsSerializer"]>
 			>,
 			context: TContext
-		) => Promise<TRequestMap[TRequest]["resultSerializer"]["T"]>
+		) => Promise<SerializerT<TRequestMap[TRequest]["resultSerializer"]>>
 		: (
 			arg: EmptyObjectToVoid<
-				TRequestMap[TRequest]["paramsSerializer"]["T"]
+				SerializerT<TRequestMap[TRequest]["paramsSerializer"]>
 			>,
 			context: TContext
 		) => void;
@@ -84,21 +85,21 @@ export type ContractHandlerOf<
 > = {
 	[TKey in RequestKeys<TRequestMap>]: TRequestMap[TKey] extends AnyRequestContract
 	? (
-		arg: TRequestMap[TKey]["paramsSerializer"]["T"],
+		arg: SerializerT<TRequestMap[TKey]["paramsSerializer"]>,
 		info: RequestHandlerInfo<
-			TRequestMap[TKey]["errorSerializer"]["T"],
+			SerializerT<TRequestMap[TKey]["errorSerializer"]>,
 			ContractInterfaceOf<TCounterPartRequestMap, TOtherContext>,
 			TContext
 		>
 	) => Promise<
-		| TRequestMap[TKey]["resultSerializer"]["T"]
-		| ErrorWrapper<TRequestMap[TKey]["errorSerializer"]["T"]>
+		| SerializerT<TRequestMap[TKey]["resultSerializer"]>
+		| ErrorWrapper<SerializerT<TRequestMap[TKey]["errorSerializer"]>>
 	>
 	: never; // cannot happen
 } &
 	{
 		[TKey in NotificationKeys<TRequestMap>]?: (
-			arg: TRequestMap[TKey]["paramsSerializer"]["T"],
+			arg: SerializerT<TRequestMap[TKey]["paramsSerializer"]>,
 			info: HandlerInfo<
 				ContractInterfaceOf<TCounterPartRequestMap, TOtherContext>,
 				TContext

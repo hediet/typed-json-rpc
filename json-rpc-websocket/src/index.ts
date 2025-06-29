@@ -1,6 +1,6 @@
 import { Message, BaseMessageStream } from "@hediet/json-rpc";
-import WebSocket = require("isomorphic-ws");
 import { EventEmitter } from "@hediet/std/events";
+import WebSocket = require("isomorphic-ws");
 
 export type NormalizedWebSocketOptions = {
 	address: string;
@@ -9,10 +9,10 @@ export type NormalizedWebSocketOptions = {
 export type WebSocketOptions =
 	| NormalizedWebSocketOptions
 	| {
-			host: string;
-			port: number;
-			forceTls?: boolean;
-	  };
+		host: string;
+		port: number;
+		forceTls?: boolean;
+	};
 
 /**
  * Normalizes the given options to `NormalizedWebSocketOptions`.
@@ -24,9 +24,8 @@ export function normalizeWebSocketOptions(
 	if ("host" in options) {
 		const useTls = options.forceTls!!;
 		return {
-			address: `${useTls ? "wss" : "ws"}://${options.host}:${
-				options.port
-			}`,
+			address: `${useTls ? "wss" : "ws"}://${options.host}:${options.port
+				}`,
 		};
 	} else {
 		return options;
@@ -38,9 +37,7 @@ export function normalizeWebSocketOptions(
  * Use the static `connectTo` method to get a stream to a web socket server.
  */
 export class WebSocketStream extends BaseMessageStream {
-	public static connectTo(
-		options: WebSocketOptions
-	): Promise<WebSocketStream> {
+	public static connectTo(options: WebSocketOptions): Promise<WebSocketStream> {
 		const normalizedOptions = normalizeWebSocketOptions(options);
 		const ws = new WebSocket(normalizedOptions.address);
 		return new Promise((res, rej) => {
@@ -54,7 +51,7 @@ export class WebSocketStream extends BaseMessageStream {
 		});
 	}
 
-	private readonly errorEmitter = new EventEmitter<{ error: Error }>();
+	private readonly errorEmitter = new EventEmitter<{ error: unknown }>();
 	public readonly onError = this.errorEmitter.asEvent();
 
 	constructor(private readonly socket: WebSocket) {
@@ -71,7 +68,7 @@ export class WebSocketStream extends BaseMessageStream {
 				} else {
 					throw new Error("Not supported"); // TODO test
 				}
-			} catch (error) {
+			} catch (error: unknown) {
 				this.errorEmitter.emit({ error });
 			}
 		};

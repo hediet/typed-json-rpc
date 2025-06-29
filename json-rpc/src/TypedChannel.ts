@@ -1,4 +1,3 @@
-import { Serializer, sAny, sObject, BaseSerializer, sNull, DeserializeContext } from "@hediet/semantic-json";
 import { Disposable } from "@hediet/std/disposable";
 import { IRequestSender, Channel, RequestObject, ResponseObject } from "./Channel";
 import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "./JsonRpcTypes";
@@ -8,6 +7,7 @@ import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "./StreamBasedChannel";
 import { EventEmitter } from "@hediet/std/events";
+import { convertSerializer, ISerializer, Serializers, SerializerTAny } from "./schema";
 
 export abstract class TypedChannelBase<TContext, TSendContext> {
 	public abstract request<TParams, TResponse>(
@@ -146,7 +146,6 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	public sendExceptionDetails: boolean = false;
 
 	private readonly _logger: RpcLogger | undefined;
-	private readonly _ignoreUnexpectedPropertiesInResponses: boolean;
 
 	constructor(
 		private readonly channelCtor: Channel<TContext, TSendContext>,
@@ -154,7 +153,6 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	) {
 		super();
 		this._logger = options.logger;
-		this._ignoreUnexpectedPropertiesInResponses = !!options.ignoreUnexpectedPropertiesInResponses;
 		this.sendExceptionDetails = !!options.sendExceptionDetails;
 
 		this._timeout = startTimeout(1000, () => {
@@ -261,18 +259,16 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 			};
 		}
 
-		const decodeResult = handler.requestType.paramsSerializer.deserialize(
-			request.params
-		);
+		const decodeResult = handler.requestType.paramsSerializer.deserializeFromJson(request.params);
 		if (decodeResult.hasErrors) {
-			const message = `Got invalid params: ${decodeResult.formatError()}`;
+			const message = `Got invalid params: ${decodeResult.errorMessage}`;
 
 			if (this._logger) {
 				this._logger.debug({
 					text: message,
 					data: {
 						requestObject: request,
-						errors: decodeResult.errors,
+						errorMessage: decodeResult.errorMessage,
 					},
 				});
 			}
@@ -282,9 +278,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 					code: ErrorCode.invalidParams,
 					message,
 					data: {
-						errors: decodeResult.errors.map(
-							(e) => e.message || null
-						),
+						errors: decodeResult.errorMessage,
 					},
 				},
 			};
@@ -295,26 +289,14 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 				const result = await handler.handler(args, requestId, context);
 				if ("error" in result || "errorMessage" in result) {
 					const errorData = result.error
-						? handler.requestType.errorSerializer.serialize(
-							result.error
-						)
+						? (handler.requestType.errorSerializer.serializeToJson(result.error))
 						: undefined;
 
-					const code =
-						result.errorCode || ErrorCode.genericApplicationError;
-					const message =
-						result.errorMessage || "An error was returned";
-					response = {
-						error: {
-							code,
-							message,
-							data: errorData,
-						},
-					};
+					const code = result.errorCode || ErrorCode.genericApplicationError;
+					const message = result.errorMessage || "An error was returned";
+					response = { error: { code, message, data: errorData } };
 				} else {
-					const val = handler.requestType.resultSerializer.serialize(
-						result.ok
-					);
+					const val = handler.requestType.resultSerializer.serializeToJson(result.ok);
 					response = { result: val };
 				}
 			} catch (exception) {
@@ -382,20 +364,14 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 			return;
 		}
 
-		const deserializeContext = this._ignoreUnexpectedPropertiesInResponses
-			? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
-			: DeserializeContext.default;
-		const decodeResult = handler.notificationType.paramsSerializer.deserialize(
-			request.params,
-			deserializeContext
-		);
+		const decodeResult = handler.notificationType.paramsSerializer.deserializeFromJson(request.params);
 		if (decodeResult.hasErrors) {
 			if (this._logger) {
 				this._logger.debug({
-					text: `Got invalid params: ${decodeResult.formatError()}`,
+					text: `Got invalid params: ${decodeResult}`,
 					data: {
 						requestObject: request,
-						errors: decodeResult.errors,
+						errorMessage: decodeResult.errorMessage,
 					},
 				});
 			}
@@ -493,15 +469,9 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 			throw new Error("Impossible");
 		}
 
-		const params = requestType.paramsSerializer.serialize(args);
+		const params = requestType.paramsSerializer.serializeToJson(args);
 
 		assertObjectArrayOrNull(params);
-
-		if (this._ignoreUnexpectedPropertiesInResponses) {
-			if (typeof params === "object" && params !== null) {
-				(params as any)["$ignoreUnexpectedProperties"] = true;
-			}
-		}
 
 		const response = await this._channel.sendRequest(
 			{
@@ -514,35 +484,24 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		if ("error" in response) {
 			let errorData;
 			if (response.error.data !== undefined) {
-				const deserializationResult = requestType.errorSerializer.deserialize(
+				const deserializationResult = requestType.errorSerializer.deserializeFromJson(
 					response.error.data
 				);
 				if (deserializationResult.hasErrors) {
-					throw new Error(deserializationResult.formatError());
+					throw new Error(deserializationResult.errorMessage);
 				}
 				errorData = deserializationResult.value;
 			} else {
 				errorData = undefined;
 			}
 
-			const error = new RequestHandlingError(
-				response.error.message,
-				errorData,
-				response.error.code
-			);
+			const error = new RequestHandlingError(response.error.message, errorData, response.error.code);
 			this._requestDidErrorEventEmitter.emit({ error });
 			throw error;
 		} else {
-			const deserializeContext = this
-				._ignoreUnexpectedPropertiesInResponses
-				? DeserializeContext.default.withoutReportUnexpectedPropertiesAsError()
-				: DeserializeContext.default;
-			const result = requestType.resultSerializer.deserialize(
-				response.result,
-				deserializeContext
-			);
+			const result = requestType.resultSerializer.deserializeFromJson(response.result);
 			if (result.hasErrors) {
-				throw new Error(result.formatError());
+				throw new Error('Could not deserialize response: ' + result.errorMessage + `\n\n${JSON.stringify(response, null, 2)}`);
 			} else {
 				return result.value;
 			}
@@ -555,27 +514,14 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		context: TSendContext
 	): Promise<void> {
 		if (!this.checkChannel(this._channel)) {
-			throw "";
+			throw new Error();
 		}
 
-		const encodedParams = notificationType.paramsSerializer.serialize(
-			params
-		);
+		const encodedParams = notificationType.paramsSerializer.serializeToJson(params);
 
 		assertObjectArrayOrNull(encodedParams);
-		if (this._ignoreUnexpectedPropertiesInResponses) {
-			if (typeof params === "object" && params !== null) {
-				(params as any)["$ignoreUnexpectedProperties"] = true;
-			}
-		}
 
-		this._channel.sendNotification(
-			{
-				method: notificationType.method,
-				params: encodedParams,
-			},
-			context
-		);
+		this._channel.sendNotification({ method: notificationType.method, params: encodedParams }, context);
 	}
 
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {
@@ -661,9 +607,9 @@ export class RequestType<
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramsSerializer: BaseSerializer<TParams>,
-		public readonly resultSerializer: BaseSerializer<TResponse>,
-		public readonly errorSerializer: BaseSerializer<TError>
+		public readonly paramsSerializer: ISerializer<TParams>,
+		public readonly resultSerializer: ISerializer<TResponse>,
+		public readonly errorSerializer: ISerializer<TError>
 	) { }
 
 	public withMethod(
@@ -686,7 +632,7 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 
 	constructor(
 		public readonly method: TMethod,
-		public readonly paramsSerializer: Serializer<TParams>
+		public readonly paramsSerializer: ISerializer<TParams>
 	) { }
 
 	public withMethod(method: string): NotificationType<TParams, string> {
@@ -700,7 +646,7 @@ export class NotificationType<TParams = unknown, TMethod = string> {
 export function rawNotification(
 	method: string
 ): NotificationType<JSONObject | JSONArray | undefined> {
-	return new NotificationType(method, sAny());
+	return new NotificationType(method, Serializers.sAny());
 }
 
 /**
@@ -708,20 +654,20 @@ export function rawNotification(
  */
 export function requestType<
 	TMethod extends string | undefined = undefined,
-	TParams extends Serializer<any> = Serializer<{}>,
-	TResult extends Serializer<any> = Serializer<void>,
-	TError extends Serializer<any> = Serializer<undefined>
+	TParams = ISerializer<{}>,
+	TResult = ISerializer<void>,
+	TError = ISerializer<undefined>
 >(request: {
 	method?: TMethod;
 	params?: TParams;
 	result?: TResult;
 	error?: TError;
-}): RequestType<TParams["T"], TResult["T"], TError["T"], TMethod> {
+}): RequestType<SerializerTAny<TParams>, SerializerTAny<TResult>, SerializerTAny<TError>, TMethod> {
 	return new RequestType(
 		request.method!,
-		request.params ? request.params : sObject({}),
-		request.result ? request.result : sVoidToNull(),
-		request.error ? request.error : sVoidToNull()
+		request.params ? convertSerializer(request.params) as any : Serializers.sEmptyObject(),
+		request.result ? convertSerializer(request.result) as any : Serializers.sVoidFromNull(),
+		request.error ? convertSerializer(request.error) as any : Serializers.sVoidFromNull()
 	);
 }
 
@@ -733,15 +679,7 @@ export function unverifiedRequest<
 >(request?: {
 	method?: TMethod;
 }): RequestType<TParams, TResult, TError, TMethod> {
-	return new RequestType((request || {}).method!, sAny(), sAny(), sAny());
-}
-
-export function sVoidToNull(): Serializer<void> {
-	return sNull().refine({
-		canSerialize: (val): val is void => val === undefined,
-		fromIntermediate: (i) => undefined,
-		toIntermediate: (i) => null,
-	});
+	return new RequestType((request || {}).method!, Serializers.sAny(), Serializers.sAny(), Serializers.sAny());
 }
 
 /**
@@ -749,22 +687,21 @@ export function sVoidToNull(): Serializer<void> {
  */
 export function notificationType<
 	TMethod extends string | undefined = undefined,
-	TParams extends Serializer<any> = Serializer<{}>
+	TParams = ISerializer<{}>
 >(notification: {
 	method?: TMethod;
 	params?: TParams;
-}): NotificationType<TParams["T"], TMethod> {
+}): NotificationType<SerializerTAny<TParams>, TMethod> {
 	return new NotificationType(
 		notification.method!,
-		notification.params ? notification.params : sObject({})
+		notification.params ? convertSerializer(notification.params) as any : Serializers.sEmptyObject()
 	);
 }
 
-export function unverifiedNotification<
-	TParams,
-	TMethod extends string | undefined = undefined
->(request?: { method?: TMethod }): NotificationType<TParams, TMethod> {
-	return new NotificationType((request || {}).method!, sAny());
+export function unverifiedNotification<TParams, TMethod extends string | undefined = undefined>
+	(request?: { method?: TMethod }
+	): NotificationType<TParams, TMethod> {
+	return new NotificationType((request || {}).method!, Serializers.sAny());
 }
 
 function setAndDeleteOnDispose<T>(set: Set<T>, item: T): Disposable;
