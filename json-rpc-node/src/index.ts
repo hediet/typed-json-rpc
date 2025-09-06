@@ -22,6 +22,8 @@ export class NodeJsMessageStream extends BaseMessageStream {
 		return new NodeJsMessageStream(process.stdin!, process.stdout!);
 	}
 
+	private buffer: string = "";
+
 	constructor(
 		private readonly _writeStream: NodeJS.WritableStream,
 		private readonly _readStream: NodeJS.ReadableStream,
@@ -32,10 +34,22 @@ export class NodeJsMessageStream extends BaseMessageStream {
 
 		this._readStream.on("data", (chunk: any) => {
 			const str = chunk.toString("utf8");
-			const parts = str.trim().split("\n"); // todo improve
-			for (const p of parts) {
-				const obj = JSON.parse(p) as Message;
-				this.onMessage(obj);
+			this.buffer += str;
+			
+			// Process complete messages (terminated by newlines)
+			let newlineIndex: number;
+			while ((newlineIndex = this.buffer.indexOf("\n")) !== -1) {
+				const messageStr = this.buffer.substring(0, newlineIndex).trim();
+				this.buffer = this.buffer.substring(newlineIndex + 1);
+				
+				if (messageStr.length > 0) {
+					try {
+						const obj = JSON.parse(messageStr) as Message;
+						this.onMessage(obj);
+					} catch (error) {
+						console.error(`Failed to parse JSON message: ${messageStr}`, error);
+					}
+				}
 			}
 		});
 
