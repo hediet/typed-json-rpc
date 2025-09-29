@@ -248,17 +248,11 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 		const header = `Content-Length: ${contentLength}\r\n\r\n`;
 
 		return new Promise((res, rej) => {
-			this._writeStream.write(header, 'ascii', (err) => {
+			this._writeStream.write(header + messageStr, 'utf8', (err) => {
 				if (err) {
 					rej(err);
 				} else {
-					this._writeStream.write(messageStr, 'utf8', (err) => {
-						if (err) {
-							rej(err);
-						} else {
-							res();
-						}
-					});
+					res();
 				}
 			});
 		});
