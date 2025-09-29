@@ -1,8 +1,8 @@
 import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandlerFunc, TypedChannelBase, TypedChannelOptions } from "./TypedChannel";
-import { RequestId } from "./JsonRpcTypes";
-import { IMessageStream } from "./MessageStream";
+import { RequestId } from "../JsonRpcTypes";
+import { IMessageStream } from "../MessageStream";
 import { Disposable } from "@hediet/std/disposable";
-import { SerializerT } from "./schema";
+import { SerializerT } from "../schema";
 
 /**
  * Describes a request type as part of a `Contract`.
@@ -289,9 +289,12 @@ export class Contract<
 
 		for (const [key, req] of Object.entries(myContract)) {
 			if (req.kind === "request") {
-				const method = myInterface[key];
+				let method = myInterface[key];
 				if (!method) {
-					throw new Error(`No handler for request with method "${key}" was given!`);
+					//throw new Error(`No handler for request with method "${key}" was given!`);
+					method = () => {
+						console.error('foo');
+					}
 				}
 				const handler = this.createRequestHandler<TListenerContext>(counterpart, method);
 				disposables.push(typedChannel.registerRequestHandler(req, handler));

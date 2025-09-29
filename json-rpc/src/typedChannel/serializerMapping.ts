@@ -1,4 +1,4 @@
-import { ISerializer } from "./schema";
+import { ISerializer } from "../schema";
 
 declare global {
     interface JsonRpcSerializerMapper<T> {

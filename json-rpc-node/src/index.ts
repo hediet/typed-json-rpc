@@ -35,17 +35,17 @@ export class NodeJsMessageStream extends BaseMessageStream {
 		this._readStream.on("data", (chunk: any) => {
 			const str = chunk.toString("utf8");
 			this.buffer += str;
-			
+
 			// Process complete messages (terminated by newlines)
 			let newlineIndex: number;
 			while ((newlineIndex = this.buffer.indexOf("\n")) !== -1) {
 				const messageStr = this.buffer.substring(0, newlineIndex).trim();
 				this.buffer = this.buffer.substring(newlineIndex + 1);
-				
+
 				if (messageStr.length > 0) {
 					try {
 						const obj = JSON.parse(messageStr) as Message;
-						this.onMessage(obj);
+						this._onMessage(obj);
 					} catch (error) {
 						console.error(`Failed to parse JSON message: ${messageStr}`, error);
 					}
@@ -56,14 +56,14 @@ export class NodeJsMessageStream extends BaseMessageStream {
 		this._readStream.on("close", () => {
 			if (!closed) {
 				closed = true;
-				this.onConnectionClosed();
+				this._onConnectionClosed();
 			}
 		});
 
 		this._writeStream.on("close", () => {
 			if (!closed) {
 				closed = true;
-				this.onConnectionClosed();
+				this._onConnectionClosed();
 			}
 		});
 	}
@@ -139,14 +139,14 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 		this._readStream.on("close", () => {
 			if (!closed) {
 				closed = true;
-				this.onConnectionClosed();
+				this._onConnectionClosed();
 			}
 		});
 
 		this._writeStream.on("close", () => {
 			if (!closed) {
 				closed = true;
-				this.onConnectionClosed();
+				this._onConnectionClosed();
 			}
 		});
 	}
@@ -185,7 +185,7 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 				this.nextMessageLength = -1;
 				const messageStr = body.toString('utf8');
 				const message = JSON.parse(messageStr) as Message;
-				this.onMessage(message);
+				this._onMessage(message);
 			}
 		} catch (error) {
 			console.error('Error processing LSP message:', error);

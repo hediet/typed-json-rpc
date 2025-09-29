@@ -1,13 +1,13 @@
 import { Disposable } from "@hediet/std/disposable";
-import { IRequestSender, Channel, RequestObject, ResponseObject } from "./Channel";
-import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "./JsonRpcTypes";
-import { RpcLogger } from "./Logger";
-import { IMessageStream } from "./MessageStream";
+import { IRequestSender, Channel, RequestObject, ResponseObject } from "../Channel";
+import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "../JsonRpcTypes";
+import { RpcLogger } from "../Logger";
+import { IMessageStream } from "../MessageStream";
 import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
-import { StreamBasedChannel } from "./StreamBasedChannel";
+import { StreamBasedChannel } from "../StreamBasedChannel";
 import { EventEmitter } from "@hediet/std/events";
-import { convertSerializer, ISerializer, Serializers, SerializerTAny } from "./schema";
+import { convertSerializer, ISerializer, Serializers, SerializerTAny } from "../schema";
 
 export abstract class TypedChannelBase<TContext, TSendContext> {
 	public abstract request<TParams, TResponse>(

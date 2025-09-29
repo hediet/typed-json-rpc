@@ -31,8 +31,8 @@ export interface IMessageStream {
 export abstract class BaseMessageStream implements IMessageStream {
 	private static id = 0;
 
-	private readonly unreadMessages: Message[] = [];
-	private onMessageCallback: ((readMessage: Message) => void) | undefined;
+	private readonly _unreadMessages: Message[] = [];
+	private _onMessageCallback: ((readMessage: Message) => void) | undefined;
 	protected readonly id = BaseMessageStream.id++;
 
 	private readonly _isClosed = new ValueWithChangeEvent<boolean>(false);
@@ -42,14 +42,14 @@ export abstract class BaseMessageStream implements IMessageStream {
 	 * Sets a callback for incoming messages.
 	 */
 	public setReadCallback(callback: ((readMessage: Message) => void) | undefined): void {
-		this.onMessageCallback = callback;
+		this._onMessageCallback = callback;
 
 		if (!callback) {
 			return;
 		}
 
-		while (this.unreadMessages.length > 0) {
-			const msg = this.unreadMessages.shift()!;
+		while (this._unreadMessages.length > 0) {
+			const msg = this._unreadMessages.shift()!;
 			callback(msg);
 		}
 	}
@@ -67,19 +67,19 @@ export abstract class BaseMessageStream implements IMessageStream {
 	/**
 	 * Call this in derived classes to signal a new message.
 	 */
-	protected onMessage(message: Message): void {
-		const hasReadAllQueuedMessages = this.unreadMessages.length === 0;
-		if (hasReadAllQueuedMessages && this.onMessageCallback) {
-			this.onMessageCallback(message);
+	protected _onMessage(message: Message): void {
+		const hasReadAllQueuedMessages = this._unreadMessages.length === 0;
+		if (hasReadAllQueuedMessages && this._onMessageCallback) {
+			this._onMessageCallback(message);
 		} else {
-			this.unreadMessages.push(message);
+			this._unreadMessages.push(message);
 		}
 	}
 
 	/**
 	 * Call this in derived classes to signal that the connection closed.
 	 */
-	protected onConnectionClosed(): void {
+	protected _onConnectionClosed(): void {
 		this._isClosed.value = true;
 	}
 
