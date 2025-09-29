@@ -1,5 +1,5 @@
-import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandlerFunc, TypedChannelBase, TypedChannelOptions } from "./TypedChannel";
-import { RequestId } from "../JsonRpcTypes";
+import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandlerFunc, TypedChannelBase, TypedChannelOptions, OptionalMethodNotFound } from "./TypedChannel";
+import { RequestId, ErrorCode } from "../JsonRpcTypes";
 import { IMessageStream } from "../MessageStream";
 import { Disposable } from "@hediet/std/disposable";
 import { SerializerT } from "../schema";
@@ -11,10 +11,11 @@ import { SerializerT } from "../schema";
 export type ContractRequestType<
 	TParams = unknown,
 	TResult = unknown,
-	TError = unknown
-> = RequestType<TParams, TResult, TError, string | undefined>;
+	TError = unknown,
+	TOptional extends boolean = boolean
+> = RequestType<TParams, TResult, TError, string | undefined, TOptional>;
 
-export type AnyRequestContract = ContractRequestType<any, any, any>;
+export type AnyRequestContract = ContractRequestType<any, any, any, boolean>;
 export type AsRequestContract<T extends AnyRequestContract> = T;
 
 /**
@@ -47,19 +48,13 @@ export type ContractInterfaceOf<
 	TRequestMap extends OneSideContract,
 	TContext
 > = {
-		[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
-		? (
-			arg: EmptyObjectToVoid<
-				SerializerT<TRequestMap[TRequest]["paramsSerializer"]>
-			>,
-			context: TContext
-		) => Promise<SerializerT<TRequestMap[TRequest]["resultSerializer"]>>
-		: (
-			arg: EmptyObjectToVoid<
-				SerializerT<TRequestMap[TRequest]["paramsSerializer"]>
-			>,
-			context: TContext
-		) => void;
+		[TRequest in keyof TRequestMap]:
+		(
+			arg: EmptyObjectToVoid<SerializerT<TRequestMap[TRequest]["paramsSerializer"]>>,
+			context: TContext,
+		) => TRequestMap[TRequest] extends AnyRequestContract
+			? Promise<SerializerT<TRequestMap[TRequest]["resultSerializer"]>> | (TRequestMap[TRequest]['isOptional'] extends true ? OptionalMethodNotFound : never)
+			: void;
 	};
 
 /** Marks a type as error wrapper. */
@@ -82,42 +77,40 @@ export type ContractHandlerOf<
 	TCounterPartRequestMap extends OneSideContract,
 	TContext,
 	TOtherContext
-> = {
-	[TKey in RequestKeys<TRequestMap>]: TRequestMap[TKey] extends AnyRequestContract
-	? (
-		arg: SerializerT<TRequestMap[TKey]["paramsSerializer"]>,
-		info: RequestHandlerInfo<
-			SerializerT<TRequestMap[TKey]["errorSerializer"]>,
-			ContractInterfaceOf<TCounterPartRequestMap, TOtherContext>,
-			TContext
+> = ObjectWithOptional<{
+	[TKey in keyof TRequestMap]: TRequestMap[TKey] extends AnyRequestContract
+	? {
+		optional: TRequestMap[TKey]['isOptional'],
+		type: (
+			arg: SerializerT<TRequestMap[TKey]["paramsSerializer"]>,
+			info: RequestHandlerInfo<
+				SerializerT<TRequestMap[TKey]["errorSerializer"]>,
+				ContractInterfaceOf<TCounterPartRequestMap, TOtherContext>,
+				TContext
+			>
+		) => Promise<
+			| SerializerT<TRequestMap[TKey]["resultSerializer"]>
+			| ErrorWrapper<SerializerT<TRequestMap[TKey]["errorSerializer"]>>
 		>
-	) => Promise<
-		| SerializerT<TRequestMap[TKey]["resultSerializer"]>
-		| ErrorWrapper<SerializerT<TRequestMap[TKey]["errorSerializer"]>>
-	>
-	: never; // cannot happen
-} &
+	} :
 	{
-		[TKey in NotificationKeys<TRequestMap>]?: (
+		optional: true,
+		type: (
 			arg: SerializerT<TRequestMap[TKey]["paramsSerializer"]>,
 			info: HandlerInfo<
 				ContractInterfaceOf<TCounterPartRequestMap, TOtherContext>,
 				TContext
 			>
 		) => void;
-	};
+	}
+}>;
 
-export type RequestKeys<TRequestMap extends OneSideContract> = {
-	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
-	? TRequest
-	: never;
-}[keyof TRequestMap];
+export type ObjectWithOptional<T extends Record<string, { optional: boolean; type: any }>> =
+	(
+		{ [K in keyof T]?: T[K]["type"] } &
+		{ [K in keyof T as T[K]["optional"] extends false ? K : never]-?: T[K]["type"] }
+	) extends infer O ? { [K in keyof O]: O[K] } : never
 
-export type NotificationKeys<TRequestMap extends OneSideContract> = {
-	[TRequest in keyof TRequestMap]: TRequestMap[TRequest] extends AnyRequestContract
-	? never
-	: TRequest;
-}[keyof TRequestMap];
 
 /**
  * Describes a contract.
@@ -256,12 +249,29 @@ export class Contract<
 		for (const [key, req] of Object.entries(otherContract)) {
 			let method;
 			if (req.kind === "request") {
-				method = (args: any, context: TSendContext) => {
-					if (args === undefined) {
-						args = {};
-					}
-					return typedChannel.request(req, args, context);
-				};
+				if (req.isOptional) {
+					method = async (args: any, context: TSendContext) => {
+						if (args === undefined) {
+							args = {};
+						}
+						try {
+							return await typedChannel.request(req, args, context);
+						} catch (error: any) {
+							// TODO use proper types
+							if (error && error.code === ErrorCode.methodNotFound) {
+								return OptionalMethodNotFound;
+							}
+							throw error;
+						}
+					};
+				} else {
+					method = (args: any, context: TSendContext) => {
+						if (args === undefined) {
+							args = {};
+						}
+						return typedChannel.request(req, args, context);
+					};
+				}
 			} else {
 				method = (args: any, context: TSendContext) => {
 					if (args === undefined) {

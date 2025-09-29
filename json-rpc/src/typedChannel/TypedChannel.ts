@@ -9,12 +9,15 @@ import { StreamBasedChannel } from "../StreamBasedChannel";
 import { EventEmitter } from "@hediet/std/events";
 import { convertSerializer, ISerializer, Serializers, SerializerTAny } from "../schema";
 
+export const OptionalMethodNotFound = Symbol("OptionalMethodNotFound");
+export type OptionalMethodNotFound = typeof OptionalMethodNotFound;
+
 export abstract class TypedChannelBase<TContext, TSendContext> {
-	public abstract request<TParams, TResponse>(
-		requestType: RequestType<TParams, TResponse, unknown>,
+	public abstract request<TParams, TResponse, TOptional extends boolean>(
+		requestType: RequestType<TParams, TResponse, unknown, string | undefined, TOptional>,
 		args: TParams,
 		context: TSendContext
-	): Promise<TResponse>;
+	): Promise<TOptional extends true ? TResponse | OptionalMethodNotFound : TResponse>;
 
 	public abstract notify<TParams>(
 		notificationType: NotificationType<TParams>,
@@ -63,11 +66,11 @@ class ContextualizedTypedChannel<
 		super();
 	}
 
-	public async request<TParams, TResponse>(
-		requestType: RequestType<TParams, TResponse, unknown>,
+	public async request<TParams, TResponse, TOptional extends boolean>(
+		requestType: RequestType<TParams, TResponse, unknown, string, TOptional>,
 		args: TParams,
 		newContext: TNewSendContext
-	): Promise<TResponse> {
+	): Promise<TOptional extends true ? TResponse | OptionalMethodNotFound : TResponse> {
 		const context = await this.converters.getSendContext(newContext);
 		return this.underylingTypedChannel.request(requestType, args, context);
 	}
@@ -460,11 +463,11 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		return result;
 	}
 
-	public async request<TParams, TResponse>(
-		requestType: RequestType<TParams, TResponse, unknown>,
+	public async request<TParams, TResponse, TOptional extends boolean>(
+		requestType: RequestType<TParams, TResponse, unknown, string, TOptional>,
 		args: TParams,
 		context: TSendContext
-	): Promise<TResponse> {
+	): Promise<TOptional extends true ? TResponse | OptionalMethodNotFound : TResponse> {
 		if (!this.checkChannel(this._channel)) {
 			throw new Error("Impossible");
 		}
@@ -482,6 +485,10 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		);
 
 		if ("error" in response) {
+			if (requestType.isOptional && response.error.code === ErrorCode.methodNotFound) {
+				return OptionalMethodNotFound as any;
+			}
+
 			let errorData;
 			if (response.error.data !== undefined) {
 				const deserializationResult = requestType.errorSerializer.deserializeFromJson(
@@ -601,7 +608,8 @@ export class RequestType<
 	TParams = unknown,
 	TResponse = unknown,
 	TError = unknown,
-	TMethod extends string | undefined = string
+	TMethod extends string | undefined = string,
+	TOptional extends boolean = false,
 > {
 	public readonly kind: "request" = "request";
 
@@ -609,7 +617,8 @@ export class RequestType<
 		public readonly method: TMethod,
 		public readonly paramsSerializer: ISerializer<TParams>,
 		public readonly resultSerializer: ISerializer<TResponse>,
-		public readonly errorSerializer: ISerializer<TError>
+		public readonly errorSerializer: ISerializer<TError>,
+		public readonly isOptional: TOptional = false as TOptional,
 	) { }
 
 	public withMethod(
@@ -620,6 +629,16 @@ export class RequestType<
 			this.paramsSerializer,
 			this.resultSerializer,
 			this.errorSerializer
+		);
+	}
+
+	public optional(): RequestType<TParams, TResponse, TError, TMethod, true> {
+		return new RequestType(
+			this.method,
+			this.paramsSerializer,
+			this.resultSerializer,
+			this.errorSerializer,
+			true as true
 		);
 	}
 }
@@ -671,11 +690,12 @@ export function requestType<
 	);
 }
 
+// TODO remove TMethod
 export function unverifiedRequest<
 	TParams = {},
 	TResult = void,
 	TError = void,
-	TMethod extends string | undefined = undefined
+	TMethod extends string | undefined = string
 >(request?: {
 	method?: TMethod;
 }): RequestType<TParams, TResult, TError, TMethod> {
@@ -698,7 +718,8 @@ export function notificationType<
 	);
 }
 
-export function unverifiedNotification<TParams, TMethod extends string | undefined = undefined>
+// TODO remove TMethod
+export function unverifiedNotification<TParams, TMethod extends string | undefined = string>
 	(request?: { method?: TMethod }
 	): NotificationType<TParams, TMethod> {
 	return new NotificationType((request || {}).method!, Serializers.sAny());
