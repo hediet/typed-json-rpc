@@ -64,7 +64,7 @@ export class WebSocketStream extends BaseMessageStream {
 				if (typeof data === "string") {
 					const json = JSON.parse(data) as Message;
 					// TODO check type of json
-					this.onMessage(json);
+					this._onMessage(json);
 				} else {
 					throw new Error("Not supported"); // TODO test
 				}
@@ -74,7 +74,7 @@ export class WebSocketStream extends BaseMessageStream {
 		};
 
 		socket.onclose = (_event) => {
-			this.onConnectionClosed();
+			this._onConnectionClosed();
 		};
 	}
 

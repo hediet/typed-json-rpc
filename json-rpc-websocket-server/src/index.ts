@@ -1,4 +1,4 @@
-import WebSocket = require("ws");
+import * as WebSocket from "ws";
 import { WebSocketStream } from "@hediet/json-rpc-websocket";
 import { EventEmitter, EventSource } from "@hediet/std/events";
 import { Barrier } from "@hediet/std/synchronization";
@@ -12,8 +12,8 @@ export interface StartWebSocketServerOptions {
 	 * Use `server` to listen on an existing server.
 	 */
 	listenOn:
-		| { port: number | "random" }
-		| { server: http.Server | https.Server };
+	| { port: number | "random" }
+	| { server: http.Server | https.Server };
 }
 
 /**

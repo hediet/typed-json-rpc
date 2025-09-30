@@ -2,7 +2,7 @@
 	"references": [
 		{ "path": "./json-rpc" },
 		{ "path": "./json-rpc-browser" },
-		{ "path": "./json-rpc-streams" },
+		{ "path": "./json-rpc-node" },
 		{ "path": "./json-rpc-websocket" },
 		{ "path": "./json-rpc-websocket-server" }
 	],
