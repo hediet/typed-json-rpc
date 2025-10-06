@@ -1,7 +1,7 @@
 import { Channel, IRequestHandler, IRequestSender, RequestObject, ResponseObject } from "./Channel";
 import { ErrorCode, IRequestMessage, IResponseMessage, Message, RequestId, isRequestOrNotification } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
-import { IMessageStream } from "./MessageStream";
+import { ConnectionState, IMessageTransport } from "./MessageTransport";
 import { IValueWithChangeEvent } from "./base";
 
 /**
@@ -13,7 +13,7 @@ export class StreamBasedChannel implements IRequestSender {
 	 * This allows to delay specifying a `RequestHandler`.
 	 * Once the channel is created, it processes incoming messages.
 	 */
-	public static createChannel(stream: IMessageStream, logger: RpcLogger | undefined): Channel {
+	public static createChannel(stream: IMessageTransport, logger: RpcLogger | undefined): Channel {
 		let constructed = false;
 		return new Channel((listener) => {
 			if (constructed) {
@@ -31,11 +31,11 @@ export class StreamBasedChannel implements IRequestSender {
 	private _lastUsedRequestId = 0;
 
 	constructor(
-		private readonly _stream: IMessageStream,
+		private readonly _stream: IMessageTransport,
 		private readonly _listener: IRequestHandler | undefined,
 		private readonly _logger: RpcLogger | undefined
 	) {
-		this._stream.setReadCallback((message) => {
+		this._stream.setListener((message) => {
 			if (isRequestOrNotification(message)) {
 				if (message.id === undefined) {
 					this._processNotification(message);
@@ -48,8 +48,8 @@ export class StreamBasedChannel implements IRequestSender {
 		});
 	}
 
-	get isClosed(): IValueWithChangeEvent<boolean> {
-		return this._stream.isClosed;
+	get state(): IValueWithChangeEvent<ConnectionState> {
+		return this._stream.state;
 	}
 
 	private async _processNotification(message: IRequestMessage): Promise<void> {
@@ -142,7 +142,7 @@ export class StreamBasedChannel implements IRequestSender {
 				error: result.error,
 			};
 		}
-		await this._stream.write(responseMsg);
+		await this._stream.send(responseMsg);
 
 	}
 
@@ -195,7 +195,7 @@ export class StreamBasedChannel implements IRequestSender {
 				}
 			});
 
-			this._stream.write(message).then(undefined, (reason) => {
+			this._stream.send(message).then(undefined, (reason) => {
 				// Assuming no response will ever be sent as sending failed.
 				this._unprocessedResponses.delete(strId);
 				reject(reason);
@@ -210,7 +210,7 @@ export class StreamBasedChannel implements IRequestSender {
 			method: notification.method,
 			params: notification.params || undefined,
 		};
-		return this._stream.write(msg);
+		return this._stream.send(msg);
 	}
 
 	public toString(): string {

@@ -1,6 +1,6 @@
 import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandlerFunc, TypedChannelBase, TypedChannelOptions, OptionalMethodNotFound } from "./TypedChannel";
 import { RequestId, ErrorCode } from "../JsonRpcTypes";
-import { IMessageStream } from "../MessageStream";
+import { IMessageTransport } from "../MessageTransport";
 import { Disposable } from "@hediet/std/disposable";
 import { SerializerT } from "../schema";
 
@@ -301,10 +301,7 @@ export class Contract<
 			if (req.kind === "request") {
 				let method = myInterface[key];
 				if (!method) {
-					//throw new Error(`No handler for request with method "${key}" was given!`);
-					method = () => {
-						console.error('foo');
-					}
+					continue;
 				}
 				const handler = this.createRequestHandler<TListenerContext>(counterpart, method);
 				disposables.push(typedChannel.registerRequestHandler(req, handler));
@@ -353,7 +350,7 @@ export class Contract<
 		TContract extends Contract<any, any, void, void>
 	>(
 		contract: TContract,
-		stream: IMessageStream,
+		stream: IMessageTransport,
 		options: TypedChannelOptions,
 		clientImplementation: TContract["TClientHandler"]
 	): {
@@ -376,7 +373,7 @@ export class Contract<
 		TContract extends Contract<any, any, void, void>
 	>(
 		contract: TContract,
-		stream: IMessageStream,
+		stream: IMessageTransport,
 		options: TypedChannelOptions,
 		serverImplementation: TContract["TServerHandler"]
 	): {

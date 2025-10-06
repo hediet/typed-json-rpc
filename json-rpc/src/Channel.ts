@@ -6,6 +6,7 @@ import {
 	JSONArray,
 	JSONObject,
 } from "./JsonRpcTypes";
+import { ConnectionState } from "./MessageTransport";
 
 /**
  * Once a channel is constructed, it processes all incoming messages.
@@ -48,7 +49,7 @@ export interface IRequestSender<TContext = void> {
 	 */
 	toString(): string;
 
-	get isClosed(): IValueWithChangeEvent<boolean>;
+	get state(): IValueWithChangeEvent<ConnectionState>;
 }
 
 /**
@@ -107,7 +108,7 @@ export class LoopbackChannel<TContext> implements IRequestSender<TContext> {
 		return "Loopback";
 	}
 
-	public readonly isClosed = constValue(false);
+	public readonly state = constValue<ConnectionState>({ state: "open" });
 }
 
 export function mapMessageSenderContext<TContext, TNewContext>(
@@ -121,7 +122,7 @@ export function mapMessageSenderContext<TContext, TNewContext>(
 			messageSender.sendRequest(request, map(context), messageIdCallback),
 
 		toString: () => messageSender.toString(),
-		isClosed: messageSender.isClosed,
+		state: messageSender.state,
 	};
 }
 

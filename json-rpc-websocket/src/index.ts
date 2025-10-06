@@ -1,6 +1,5 @@
-import { Message, BaseMessageStream } from "@hediet/json-rpc";
-import { EventEmitter } from "@hediet/std/events";
-import WebSocket = require("isomorphic-ws");
+import { Message, BaseMessageTransport, EventEmitter } from "@hediet/json-rpc";
+import WebSocket from "isomorphic-ws";
 
 export type NormalizedWebSocketOptions = {
 	address: string;
@@ -36,8 +35,8 @@ export function normalizeWebSocketOptions(
  * Represents a stream through a web socket.
  * Use the static `connectTo` method to get a stream to a web socket server.
  */
-export class WebSocketStream extends BaseMessageStream {
-	public static connectTo(options: WebSocketOptions): Promise<WebSocketStream> {
+export class WebSocketTransport extends BaseMessageTransport {
+	public static connectTo(options: WebSocketOptions): Promise<WebSocketTransport> {
 		const normalizedOptions = normalizeWebSocketOptions(options);
 		const ws = new WebSocket(normalizedOptions.address);
 		return new Promise((res, rej) => {
@@ -46,13 +45,13 @@ export class WebSocketStream extends BaseMessageStream {
 				rej(err);
 			};
 			ws.onopen = () => {
-				res(new WebSocketStream(ws));
+				res(new WebSocketTransport(ws));
 			};
 		});
 	}
 
 	private readonly errorEmitter = new EventEmitter<{ error: unknown }>();
-	public readonly onError = this.errorEmitter.asEvent();
+	public readonly onError = this.errorEmitter;
 
 	constructor(private readonly socket: WebSocket) {
 		super();
@@ -64,12 +63,12 @@ export class WebSocketStream extends BaseMessageStream {
 				if (typeof data === "string") {
 					const json = JSON.parse(data) as Message;
 					// TODO check type of json
-					this._onMessage(json);
+					this._dispatchReceivedMessage(json);
 				} else {
 					throw new Error("Not supported"); // TODO test
 				}
 			} catch (error: unknown) {
-				this.errorEmitter.emit({ error });
+				this.errorEmitter.fire({ error });
 			}
 		};
 
@@ -92,7 +91,7 @@ export class WebSocketStream extends BaseMessageStream {
 		this.close();
 	}
 
-	public write(message: Message): Promise<void> {
+	public override _sendImpl(message: Message): Promise<void> {
 		const str = JSON.stringify(message);
 
 		return new Promise((res, rej) => {

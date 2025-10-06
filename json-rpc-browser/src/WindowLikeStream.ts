@@ -1,41 +1,56 @@
-import { BaseMessageStream, Message } from "@hediet/json-rpc";
+import { BaseMessageTransport, Message } from "@hediet/json-rpc";
 
 export interface WindowLike {
 	postMessage(data: any, ...misc: any[]): void;
-	addEventListener(
-		ev: "message",
-		handler: (ev: { data: any; source: WindowLike | undefined }) => void
-	): void;
+	addEventListener(eventName: "message", handler: MessageEventListener): void;
+	removeEventListener(eventName: "message", handler: MessageEventListener): void;
 }
 
-export class WindowLikeStream extends BaseMessageStream {
+export type MessageEventListener = (ev: { data: any; source: WindowLike | undefined }) => void;
+
+export class WindowLikeTransport extends BaseMessageTransport {
+	private _disposed = false;
+
 	constructor(
-		private readonly windowLike: WindowLike,
-		private readonly source: WindowLike | undefined = undefined,
-		private readonly loadingState:
+		private readonly _windowLike: WindowLike,
+		private readonly _source: WindowLike | undefined = undefined,
+		private readonly _loadingState:
 			| { loaded: boolean; onLoaded: Promise<void> }
 			| undefined = undefined
 	) {
 		super();
 
-		windowLike.addEventListener("message", ({ data, source }) => {
-			if (this.source && source !== this.source) {
-				return;
-			}
-			if (typeof data === "object" && data && "rpcMsg" in data) {
-				this.onMessage(data.rpcMsg);
-			}
-		});
+		this._windowLike.addEventListener("message", this._messageHandler);
 	}
 
-	public async write(message: Message): Promise<void> {
-		if (this.loadingState && !this.loadingState.loaded) {
-			await this.loadingState.onLoaded;
+	private readonly _messageHandler: MessageEventListener = ({ data, source }) => {
+		if (this._source && source !== this._source) {
+			return;
 		}
-		this.windowLike.postMessage({ rpcMsg: message }, "*");
+		if (typeof data === "object" && data && "rpcMsg" in data) {
+			this._dispatchReceivedMessage(data.rpcMsg);
+		}
+	};
+
+	protected override async _sendImpl(message: Message): Promise<void> {
+		if (this._disposed) {
+			throw new Error("Transport is disposed");
+		}
+		if (this._loadingState && !this._loadingState.loaded) {
+			await this._loadingState.onLoaded;
+		}
+		this._windowLike.postMessage({ rpcMsg: message }, "*");
 	}
 
 	public toString(): string {
-		return `${this.id}@${this.windowLike}`;
+		return `${this.id}@${this._windowLike}`;
+	}
+
+	public dispose(): void {
+		if (this._disposed) {
+			return;
+		}
+		this._disposed = true;
+		this._windowLike.removeEventListener("message", this._messageHandler);
 	}
 }

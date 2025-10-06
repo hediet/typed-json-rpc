@@ -1,27 +1,27 @@
-import { BaseMessageStream } from "@hediet/json-rpc";
-import { WindowLikeStream } from "./WindowLikeStream";
+import { BaseMessageTransport } from "@hediet/json-rpc";
+import { WindowLikeTransport } from "./WindowLikeStream";
 
 /**
  * Gets a stream that uses `self.postMessage` to write
  * and `self.addEventListener` to read messages.
  */
-export function connectIFrameToParent(): BaseMessageStream {
+export function connectIFrameToParent(): BaseMessageTransport {
 	if (window.self === window.top) {
 		throw new Error(`Call this function from an iframe!`);
 	}
 
-	return new WindowLikeStream(self, parent.window);
+	return new WindowLikeTransport(self, parent.window);
 }
 
 /**
  * Gets a stream that uses `worker.postMessage` to write
  * and `worker.addEventListener` to read messages.
  */
-export function connectToIFrame(iframe: HTMLIFrameElement): BaseMessageStream {
+export function connectToIFrame(iframe: HTMLIFrameElement): BaseMessageTransport {
 	if (typeof window === "undefined") {
 		throw new Error(`call this function from the main browser thread`);
 	}
-	return new WindowLikeStream(iframe.contentWindow!, iframe.contentWindow!, {
+	return new WindowLikeTransport(iframe.contentWindow!, iframe.contentWindow!, {
 		loaded: window.document.readyState === "complete",
 		onLoaded: new Promise((res) => {
 			window.addEventListener("load", () => res());

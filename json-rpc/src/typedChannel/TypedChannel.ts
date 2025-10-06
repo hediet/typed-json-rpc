@@ -2,7 +2,7 @@ import { Disposable } from "@hediet/std/disposable";
 import { IRequestSender, Channel, RequestObject, ResponseObject } from "../Channel";
 import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "../JsonRpcTypes";
 import { RpcLogger } from "../Logger";
-import { IMessageStream } from "../MessageStream";
+import { IMessageTransport } from "../MessageTransport";
 import { Deferred } from "@hediet/std/synchronization";
 import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "../StreamBasedChannel";
@@ -131,12 +131,12 @@ export interface TypedChannelOptions {
  * At this point, all request and notification handlers should be registered.
  */
 export class TypedChannel<TContext = void, TSendContext = void> extends TypedChannelBase<TContext, TSendContext> {
-	public static fromStream(stream: IMessageStream, options: TypedChannelOptions = {}): TypedChannel {
+	public static fromStream(stream: IMessageTransport, options: TypedChannelOptions = {}): TypedChannel {
 		const channelFactory = StreamBasedChannel.createChannel(stream, options.logger);
 		return new TypedChannel(channelFactory, options);
 	}
 
-	private _channel: IRequestSender<TSendContext> | undefined = undefined;
+	private _requestSender: IRequestSender<TSendContext> | undefined = undefined;
 	private readonly _handler = new Map<
 		string,
 		| RegisteredRequestHandler<any, any, any, TContext>
@@ -159,7 +159,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		this.sendExceptionDetails = !!options.sendExceptionDetails;
 
 		this._timeout = startTimeout(1000, () => {
-			if (!this._channel) {
+			if (!this._requestSender) {
 				console.warn(
 					`"${this.startListen.name}" has not been called within 1 second after construction of this channel. ` +
 					`Did you forget to call it?`,
@@ -181,7 +181,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	 * can be setup properly before handling messages.
 	 */
 	public startListen(): void {
-		if (this._channel) {
+		if (this._requestSender) {
 			throw new Error(
 				`"${this.startListen.name}" can be called only once, but it already has been called.`
 			);
@@ -190,7 +190,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 			this._timeout.dispose();
 			this._timeout = undefined;
 		}
-		this._channel = this.channelCtor.connect({
+		this._requestSender = this.channelCtor.connect({
 			handleRequest: (req, id, context) =>
 				this.handleRequest(req, id, context),
 			handleNotification: (req, context) =>
@@ -468,7 +468,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		args: TParams,
 		context: TSendContext
 	): Promise<TOptional extends true ? TResponse | OptionalMethodNotFound : TResponse> {
-		if (!this.checkChannel(this._channel)) {
+		if (!this.checkChannel(this._requestSender)) {
 			throw new Error("Impossible");
 		}
 
@@ -476,7 +476,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 
 		assertObjectArrayOrNull(params);
 
-		const response = await this._channel.sendRequest(
+		const response = await this._requestSender.sendRequest(
 			{
 				method: requestType.method,
 				params,
@@ -520,7 +520,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		params: TParams,
 		context: TSendContext
 	): Promise<void> {
-		if (!this.checkChannel(this._channel)) {
+		if (!this.checkChannel(this._requestSender)) {
 			throw new Error();
 		}
 
@@ -528,7 +528,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 
 		assertObjectArrayOrNull(encodedParams);
 
-		this._channel.sendNotification({ method: notificationType.method, params: encodedParams }, context);
+		this._requestSender.sendNotification({ method: notificationType.method, params: encodedParams }, context);
 	}
 
 	/*public requestAndCatchError(connection: Connection, body: TRequest): Promise<Result<TResponse, TError>> {

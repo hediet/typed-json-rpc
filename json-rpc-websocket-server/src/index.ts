@@ -1,5 +1,5 @@
 import * as WebSocket from "ws";
-import { WebSocketStream } from "@hediet/json-rpc-websocket";
+import { WebSocketTransport } from "@hediet/json-rpc-websocket";
 import { EventEmitter, EventSource } from "@hediet/std/events";
 import { Barrier } from "@hediet/std/synchronization";
 import * as http from "http";
@@ -22,7 +22,7 @@ export interface StartWebSocketServerOptions {
  */
 export function startWebSocketServer(
 	options: StartWebSocketServerOptions,
-	handleConnection: (stream: WebSocketStream) => void
+	handleConnection: (stream: WebSocketTransport) => void
 ): WebSocketServer {
 	let opts: WebSocket.ServerOptions = {};
 	const l = options.listenOn;
@@ -34,7 +34,7 @@ export function startWebSocketServer(
 
 	const wss = new WebSocket.Server(opts);
 	wss.on("connection", ws => {
-		const stream = new WebSocketStream(ws);
+		const stream = new WebSocketTransport(ws);
 		handleConnection(stream);
 	});
 
