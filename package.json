@@ -9,12 +9,11 @@
 		"demo"
 	],
 	"scripts": {
-		"build": "yarn build-json-rpc && yarn build-json-rpc-websocket && yarn build-json-rpc-websocket-server && yarn build-json-rpc-node && yarn build-json-rpc-browser && yarn build-demo",
-		"build-json-rpc": "yarn workspace @hediet/json-rpc build",
-		"build-json-rpc-websocket": "yarn workspace @hediet/json-rpc-websocket build",
-		"build-json-rpc-websocket-server": "yarn workspace @hediet/json-rpc-websocket-server build",
-		"build-json-rpc-node": "yarn workspace @hediet/json-rpc-node build",
-		"build-json-rpc-browser": "yarn workspace @hediet/json-rpc-browser build",
-		"build-demo": "yarn workspace demo build"
+		"build": "npm run build-json-rpc && npm run build-json-rpc-websocket && npm run build-json-rpc-node && npm run build-json-rpc-browser && npm run build-demo",
+		"build-json-rpc": "npm run --workspace @hediet/json-rpc build",
+		"build-json-rpc-websocket": "npm run --workspace @hediet/json-rpc-websocket build",
+		"build-json-rpc-node": "npm run --workspace @hediet/json-rpc-node build",
+		"build-json-rpc-browser": "npm run --workspace @hediet/json-rpc-browser build",
+		"build-demo": "npm run --workspace demo build"
 	}
 }

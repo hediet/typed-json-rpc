@@ -1,12 +1,9 @@
-import { Disposable } from "@hediet/std/disposable";
 import { IRequestSender, Channel, RequestObject, ResponseObject } from "../Channel";
 import { RequestId, ErrorCode, JSONValue, JSONArray, JSONObject } from "../JsonRpcTypes";
 import { RpcLogger } from "../Logger";
 import { IMessageTransport } from "../MessageTransport";
-import { Deferred } from "@hediet/std/synchronization";
-import { startTimeout } from "@hediet/std/timer";
 import { StreamBasedChannel } from "../StreamBasedChannel";
-import { EventEmitter } from "@hediet/std/events";
+import { createTimeout, Deferred, EventEmitter, IDisposable, setAndDeleteOnDispose } from "../common";
 import { convertSerializer, ISerializer, Serializers, SerializerTAny } from "../schema";
 
 export const OptionalMethodNotFound = Symbol("OptionalMethodNotFound");
@@ -28,12 +25,12 @@ export abstract class TypedChannelBase<TContext, TSendContext> {
 	public abstract registerNotificationHandler<TArgs>(
 		type: NotificationType<TArgs>,
 		handler: NotificationHandlerFunc<TArgs, TContext>
-	): Disposable;
+	): IDisposable;
 
 	public abstract registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
 		handler: RequestHandlerFunc<TArgs, TResponse, TError, TContext>
-	): Disposable;
+	): IDisposable;
 
 	public contextualize<TNewContext, TNewSendContext>(args: {
 		getNewContext: (context: TContext) => Promise<TNewContext> | TNewContext;
@@ -91,7 +88,7 @@ class ContextualizedTypedChannel<
 	public registerNotificationHandler<TArgs>(
 		type: NotificationType<TArgs>,
 		handler: NotificationHandlerFunc<TArgs, TNewContext>
-	): Disposable {
+	): IDisposable {
 		return this.underylingTypedChannel.registerNotificationHandler(
 			type,
 			async (arg, context) => {
@@ -104,7 +101,7 @@ class ContextualizedTypedChannel<
 	public registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
 		handler: RequestHandlerFunc<TArgs, TResponse, TError, TNewContext>
-	): Disposable {
+	): IDisposable {
 		return this.underylingTypedChannel.registerRequestHandler(
 			requestType,
 			async (arg, requestId, context) => {
@@ -131,7 +128,7 @@ export interface TypedChannelOptions {
  * At this point, all request and notification handlers should be registered.
  */
 export class TypedChannel<TContext = void, TSendContext = void> extends TypedChannelBase<TContext, TSendContext> {
-	public static fromStream(stream: IMessageTransport, options: TypedChannelOptions = {}): TypedChannel {
+	public static fromTransport(stream: IMessageTransport, options: TypedChannelOptions = {}): TypedChannel {
 		const channelFactory = StreamBasedChannel.createChannel(stream, options.logger);
 		return new TypedChannel(channelFactory, options);
 	}
@@ -145,7 +142,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	private readonly _unknownNotificationHandler = new Set<
 		(notification: RequestObject) => void
 	>();
-	private _timeout: Disposable | undefined;
+	private _timeout: IDisposable | undefined;
 	public sendExceptionDetails: boolean = false;
 
 	private readonly _logger: RpcLogger | undefined;
@@ -158,7 +155,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 		this._logger = options.logger;
 		this.sendExceptionDetails = !!options.sendExceptionDetails;
 
-		this._timeout = startTimeout(1000, () => {
+		this._timeout = createTimeout(1000, () => {
 			if (!this._requestSender) {
 				console.warn(
 					`"${this.startListen.name}" has not been called within 1 second after construction of this channel. ` +
@@ -173,7 +170,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	public onListening: Promise<void> = this.listeningDeferred.promise;
 
 	private readonly _requestDidErrorEventEmitter = new EventEmitter<{ error: RequestHandlingError; }>();
-	public readonly onRequestDidError = this._requestDidErrorEventEmitter.asEvent();
+	public readonly onRequestDidError = this._requestDidErrorEventEmitter.event;
 
 	/**
 	 * This method must be called to forward messages from the stream to this channel.
@@ -401,14 +398,14 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 
 	public registerUnknownNotificationHandler(
 		handler: (notification: RequestObject) => void
-	): Disposable {
+	): IDisposable {
 		return setAndDeleteOnDispose(this._unknownNotificationHandler, handler);
 	}
 
 	public registerRequestHandler<TArgs, TResponse, TError>(
 		requestType: RequestType<TArgs, TResponse, TError>,
 		handler: RequestHandlerFunc<TArgs, TResponse, TError, TContext>
-	): Disposable {
+	): IDisposable {
 		const registeredHandler = this._handler.get(requestType.method);
 		if (registeredHandler) {
 			throw new Error(
@@ -426,7 +423,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 	public registerNotificationHandler<TArgs>(
 		type: NotificationType<TArgs>,
 		handler: NotificationHandlerFunc<TArgs, TContext>
-	): Disposable {
+	): IDisposable {
 		let registeredHandler = this._handler.get(type.method);
 		if (!registeredHandler) {
 			registeredHandler = {
@@ -503,7 +500,7 @@ export class TypedChannel<TContext = void, TSendContext = void> extends TypedCha
 			}
 
 			const error = new RequestHandlingError(response.error.message, errorData, response.error.code);
-			this._requestDidErrorEventEmitter.emit({ error });
+			this._requestDidErrorEventEmitter.fire({ error });
 			throw error;
 		} else {
 			const result = requestType.resultSerializer.deserializeFromJson(response.result);
@@ -723,24 +720,4 @@ export function unverifiedNotification<TParams, TMethod extends string | undefin
 	(request?: { method?: TMethod }
 	): NotificationType<TParams, TMethod> {
 	return new NotificationType((request || {}).method!, Serializers.sAny());
-}
-
-function setAndDeleteOnDispose<T>(set: Set<T>, item: T): Disposable;
-function setAndDeleteOnDispose<TKey, TValue>(
-	set: Map<TKey, TValue>,
-	key: TKey,
-	item: TValue
-): Disposable;
-function setAndDeleteOnDispose(
-	set: Set<any> | Map<any, any>,
-	keyOrItem: any,
-	item?: any
-): Disposable {
-	if (set instanceof Set) {
-		set.add(keyOrItem);
-		return Disposable.create(() => set.delete(keyOrItem));
-	} else {
-		set.set(keyOrItem, item);
-		return Disposable.create(() => set.delete(keyOrItem));
-	}
 }

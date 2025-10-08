@@ -1,8 +1,8 @@
-import { NodeJsMessageStream } from "../src";
+import { NodeJsMessageTransport } from "../src";
 
-const stream = NodeJsMessageStream.connectToThisProcess();
-stream.setReadCallback(msg => {
-	stream.write({
+const stream = NodeJsMessageTransport.connectToThisProcess();
+stream.setListener(msg => {
+	stream.send({
 		jsonrpc: "2.0",
 		method: "pong",
 		params: { payload: msg as any },

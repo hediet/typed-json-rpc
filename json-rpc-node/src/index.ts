@@ -1,28 +1,28 @@
-import { Message, BaseMessageStream } from "@hediet/json-rpc";
+import { Message, BaseMessageTransport } from "@hediet/json-rpc";
 import { ChildProcess } from "child_process";
 export * from "@hediet/json-rpc";
 
 /**
  * Wraps a write and read stream.
  */
-export class NodeJsMessageStream extends BaseMessageStream {
+export class NodeJsMessageTransport extends BaseMessageTransport {
 	/**
 	 * Gets a stream that uses `process.stdout` for writing
 	 * and `process.stdin` for reading.
 	 */
-	public static connectToThisProcess(): NodeJsMessageStream {
-		return new NodeJsMessageStream(process.stdout, process.stdin);
+	public static connectToThisProcess(): NodeJsMessageTransport {
+		return new NodeJsMessageTransport(process.stdout, process.stdin);
 	}
 
 	/**
 	 * Gets a stream that uses `process.stdin` for writing
 	 * and `process.stdout` for reading of the given process `process`.
 	 */
-	public static connectToProcess(process: ChildProcess): NodeJsMessageStream {
-		return new NodeJsMessageStream(process.stdin!, process.stdout!);
+	public static connectToProcess(process: ChildProcess): NodeJsMessageTransport {
+		return new NodeJsMessageTransport(process.stdin!, process.stdout!);
 	}
 
-	private buffer: string = "";
+	private _buffer: string = "";
 
 	constructor(
 		private readonly _writeStream: NodeJS.WritableStream,
@@ -34,18 +34,18 @@ export class NodeJsMessageStream extends BaseMessageStream {
 
 		this._readStream.on("data", (chunk: any) => {
 			const str = chunk.toString("utf8");
-			this.buffer += str;
+			this._buffer += str;
 
 			// Process complete messages (terminated by newlines)
 			let newlineIndex: number;
-			while ((newlineIndex = this.buffer.indexOf("\n")) !== -1) {
-				const messageStr = this.buffer.substring(0, newlineIndex).trim();
-				this.buffer = this.buffer.substring(newlineIndex + 1);
+			while ((newlineIndex = this._buffer.indexOf("\n")) !== -1) {
+				const messageStr = this._buffer.substring(0, newlineIndex).trim();
+				this._buffer = this._buffer.substring(newlineIndex + 1);
 
 				if (messageStr.length > 0) {
 					try {
 						const obj = JSON.parse(messageStr) as Message;
-						this._onMessage(obj);
+						this._dispatchReceivedMessage(obj);
 					} catch (error) {
 						console.error(`Failed to parse JSON message: ${messageStr}`, error);
 					}
@@ -79,7 +79,7 @@ export class NodeJsMessageStream extends BaseMessageStream {
 		this.close();
 	}
 
-	public write(message: Message): Promise<void> {
+	protected override _sendImpl(message: Message): Promise<void> {
 		const str = JSON.stringify(message);
 
 		return new Promise((res, rej) => {
@@ -103,25 +103,25 @@ export class NodeJsMessageStream extends BaseMessageStream {
 /**
  * Wraps a write and read stream.
  */
-export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
+export class NodeJsMessageTransportWithHeaders extends BaseMessageTransport {
 	/**
 	 * Gets a stream that uses `process.stdout` for writing
 	 * and `process.stdin` for reading.
 	 */
-	public static connectToThisProcess(): NodeJsMessageStreamWithHeaders {
-		return new NodeJsMessageStreamWithHeaders(process.stdout, process.stdin);
+	public static connectToThisProcess(): NodeJsMessageTransportWithHeaders {
+		return new NodeJsMessageTransportWithHeaders(process.stdout, process.stdin);
 	}
 
 	/**
 	 * Gets a stream that uses `process.stdin` for writing
 	 * and `process.stdout` for reading of the given process `process`.
 	 */
-	public static connectToProcess(process: ChildProcess): NodeJsMessageStreamWithHeaders {
-		return new NodeJsMessageStreamWithHeaders(process.stdin!, process.stdout!);
+	public static connectToProcess(process: ChildProcess): NodeJsMessageTransportWithHeaders {
+		return new NodeJsMessageTransportWithHeaders(process.stdin!, process.stdout!);
 	}
 
-	private buffer: Uint8Array = new Uint8Array(0);
-	private nextMessageLength: number = -1;
+	private _buffer: Uint8Array = new Uint8Array(0);
+	private _nextMessageLength: number = -1;
 
 	constructor(
 		private readonly _writeStream: NodeJS.WritableStream,
@@ -133,7 +133,7 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 
 		this._readStream.on("data", (chunk: any) => {
 			const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-			this.onData(bufferChunk);
+			this._onData(bufferChunk);
 		});
 
 		this._readStream.on("close", () => {
@@ -151,17 +151,17 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 		});
 	}
 
-	private onData(chunk: Buffer): void {
+	private _onData(chunk: Buffer): void {
 		try {
 			// Concatenate the existing buffer with the new chunk
-			const newBuffer = new Uint8Array(this.buffer.length + chunk.length);
-			newBuffer.set(this.buffer);
-			newBuffer.set(chunk, this.buffer.length);
-			this.buffer = newBuffer;
+			const newBuffer = new Uint8Array(this._buffer.length + chunk.length);
+			newBuffer.set(this._buffer);
+			newBuffer.set(chunk, this._buffer.length);
+			this._buffer = newBuffer;
 
 			while (true) {
-				if (this.nextMessageLength === -1) {
-					const headers = this.tryReadHeaders();
+				if (this._nextMessageLength === -1) {
+					const headers = this._tryReadHeaders();
 					if (!headers) {
 						return;
 					}
@@ -173,35 +173,35 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 					if (isNaN(length)) {
 						throw new Error(`Content-Length value must be a number. Got ${contentLength}`);
 					}
-					this.nextMessageLength = length;
+					this._nextMessageLength = length;
 				}
 
-				const body = this.tryReadBody(this.nextMessageLength);
+				const body = this._tryReadBody(this._nextMessageLength);
 				if (body === undefined) {
 					// We haven't received the full message yet
 					return;
 				}
 
-				this.nextMessageLength = -1;
+				this._nextMessageLength = -1;
 				const messageStr = body.toString('utf8');
 				const message = JSON.parse(messageStr) as Message;
-				this._onMessage(message);
+				this._dispatchReceivedMessage(message);
 			}
 		} catch (error) {
 			console.error('Error processing LSP message:', error);
 		}
 	}
 
-	private tryReadHeaders(): Map<string, string> | undefined {
+	private _tryReadHeaders(): Map<string, string> | undefined {
 		// Convert to Buffer to use indexOf with string
-		const bufferView = Buffer.from(this.buffer);
+		const bufferView = Buffer.from(this._buffer);
 		const headerEnd = bufferView.indexOf('\r\n\r\n');
 		if (headerEnd === -1) {
 			return undefined;
 		}
 
-		const headerSection = this.buffer.slice(0, headerEnd);
-		this.buffer = this.buffer.slice(headerEnd + 4); // Skip the \r\n\r\n
+		const headerSection = this._buffer.slice(0, headerEnd);
+		this._buffer = this._buffer.slice(headerEnd + 4); // Skip the \r\n\r\n
 
 		const headers = new Map<string, string>();
 		const headerText = Buffer.from(headerSection).toString('ascii');
@@ -221,13 +221,13 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 		return headers;
 	}
 
-	private tryReadBody(length: number): Buffer | undefined {
-		if (this.buffer.length < length) {
+	private _tryReadBody(length: number): Buffer | undefined {
+		if (this._buffer.length < length) {
 			return undefined;
 		}
 
-		const body = Buffer.from(this.buffer.slice(0, length));
-		this.buffer = this.buffer.slice(length);
+		const body = Buffer.from(this._buffer.slice(0, length));
+		this._buffer = this._buffer.slice(length);
 		return body;
 	}
 
@@ -242,7 +242,7 @@ export class NodeJsMessageStreamWithHeaders extends BaseMessageStream {
 		this.close();
 	}
 
-	public write(message: Message): Promise<void> {
+	protected override _sendImpl(message: Message): Promise<void> {
 		const messageStr = JSON.stringify(message);
 		const contentLength = Buffer.byteLength(messageStr, 'utf8');
 		const header = `Content-Length: ${contentLength}\r\n\r\n`;

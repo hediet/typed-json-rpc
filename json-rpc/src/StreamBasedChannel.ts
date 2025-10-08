@@ -2,7 +2,7 @@ import { Channel, IRequestHandler, IRequestSender, RequestObject, ResponseObject
 import { ErrorCode, IRequestMessage, IResponseMessage, Message, RequestId, isRequestOrNotification } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
 import { ConnectionState, IMessageTransport } from "./MessageTransport";
-import { IValueWithChangeEvent } from "./base";
+import { IValueWithChangeEvent } from "./common";
 
 /**
  * Implements a channel through a stream and an optional request handler to handle incoming requests.

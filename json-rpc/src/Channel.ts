@@ -1,4 +1,4 @@
-import { constValue, IValueWithChangeEvent } from "./base";
+import { constValue, IValueWithChangeEvent } from "./common";
 import {
 	RequestId,
 	ErrorObject,

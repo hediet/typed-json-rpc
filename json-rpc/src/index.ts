@@ -6,7 +6,11 @@ export * from "./typedChannel/TypedChannel";
 export * from "./typedChannel/TypedChannelContracts";
 export * from "./Logger";
 export { ISerializer, setMapper } from "./schema";
-export { EventEmitter, IDisposable, IEvent, IValueWithChangeEvent, ValueWithChangeEvent, constValue } from "./base";
+export {
+    EventEmitter, IDisposable, IEvent,
+    IValueWithChangeEvent, ValueWithChangeEvent, constValue,
+    Barrier,
+} from "./common";
 
 import "./typedChannel/serializerMapping";
 

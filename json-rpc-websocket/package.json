@@ -1,29 +1,33 @@
 {
-	"name": "@hediet/json-rpc-websocket",
-	"description": "Provides a WebSocket to MessageStream adapter. Enables RPC calls to websocket server.",
-	"version": "0.4.0",
-	"author": {
-		"name": "Henning Dieterichs",
-		"email": "henning.dieterichs@live.de"
-	},
-	"license": "MIT",
-	"main": "./dist/index",
-	"types": "./dist/index.d.ts",
-	"files": [
-		"dist",
-		"src"
-	],
-	"scripts": {
-		"dev": "tsc --watch",
-		"build": "tsc"
-	},
-	"dependencies": {
-		"@hediet/json-rpc": "^0.4.0",
-		"@types/ws": "^8.18.1",
-		"isomorphic-ws": "^5.0.0"
-	},
-	"publishConfig": {
-		"access": "public",
-		"registry": "https://registry.npmjs.org/"
-	}
+  "name": "@hediet/json-rpc-websocket",
+  "description": "Provides a WebSocket to MessageStream adapter. Enables RPC calls to websocket server.",
+  "version": "0.5.0",
+  "author": {
+    "name": "Henning Dieterichs",
+    "email": "henning.dieterichs@live.de"
+  },
+  "license": "MIT",
+  "main": "./dist/index",
+  "exports": {
+    "./server": "./dist/server.js",
+    ".": "./dist/index.js"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@hediet/json-rpc": "^0.5.0",
+    "@types/ws": "^6.0.4",
+    "isomorphic-ws": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

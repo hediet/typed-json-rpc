@@ -1,8 +1,8 @@
 import { RequestType, NotificationType, TypedChannel, ErrorResult, RequestHandlerFunc, TypedChannelBase, TypedChannelOptions, OptionalMethodNotFound } from "./TypedChannel";
 import { RequestId, ErrorCode } from "../JsonRpcTypes";
 import { IMessageTransport } from "../MessageTransport";
-import { Disposable } from "@hediet/std/disposable";
 import { SerializerT } from "../schema";
+import { IDisposable } from "../common";
 
 /**
  * Describes a request type as part of a `Contract`.
@@ -226,7 +226,7 @@ export class Contract<
 			NotificationType<any> | RequestType<any, any, any>
 		>,
 		myInterface: Record<string, Function>
-	): { counterpart: Record<string, unknown> } & Disposable {
+	): { counterpart: Record<string, unknown> } & IDisposable {
 		const counterpart = this.buildCounterpart(typedChannel, otherContract);
 		const disposable = this.registerHandlers(
 			typedChannel,
@@ -294,8 +294,8 @@ export class Contract<
 		>,
 		myInterface: Record<string, Function>,
 		counterpart: Record<string, unknown>
-	): Disposable {
-		const disposables = new Array<Disposable>();
+	): IDisposable {
+		const disposables: IDisposable[] = [];
 
 		for (const [key, req] of Object.entries(myContract)) {
 			if (req.kind === "request") {
@@ -319,7 +319,7 @@ export class Contract<
 			}
 		}
 
-		return Disposable.create(disposables);
+		return { dispose: () => disposables.forEach(d => d.dispose()) };
 	}
 
 	private createRequestHandler<TListenerContext>(
@@ -347,7 +347,7 @@ export class Contract<
 	 * The channel starts listening immediately.
 	 */
 	public static getServerFromStream<
-		TContract extends Contract<any, any, void, void>
+		TContract extends Contract<any, { client: {}, server: {} }, void, void>
 	>(
 		contract: TContract,
 		stream: IMessageTransport,
@@ -357,7 +357,7 @@ export class Contract<
 		server: TContract["TServerInterface"];
 		channel: TypedChannel<void, void>;
 	} {
-		const channel = TypedChannel.fromStream(stream, options);
+		const channel = TypedChannel.fromTransport(stream, options);
 		const { server } = contract.getServer(channel, clientImplementation);
 		channel.startListen();
 
@@ -370,7 +370,7 @@ export class Contract<
 	 * The channel starts listening immediately.
 	 */
 	public static registerServerToStream<
-		TContract extends Contract<any, any, void, void>
+		TContract extends Contract<any, { client: {}, server: {} }, void, void>
 	>(
 		contract: TContract,
 		stream: IMessageTransport,
@@ -380,7 +380,7 @@ export class Contract<
 		client: TContract["TClientInterface"];
 		channel: TypedChannel<void, void>;
 	} {
-		const channel = TypedChannel.fromStream(stream, options);
+		const channel = TypedChannel.fromTransport(stream, options);
 		const { client } = contract.registerServer(channel, serverImplementation);
 		channel.startListen();
 		return { channel, client };
@@ -391,7 +391,7 @@ export class Contract<
 		clientImplementation: this["TClientHandler"]
 	): {
 		server: ContractInterfaceOf<TContractObject["server"], TContext>;
-	} & Disposable {
+	} & IDisposable {
 		const { counterpart, dispose } = this.getInterface(typedChannel, this.client, this.server, clientImplementation);
 
 		return { server: counterpart as any, dispose };
@@ -402,7 +402,7 @@ export class Contract<
 		serverImplementation: this["TServerHandler"]
 	): {
 		client: ContractInterfaceOf<TContractObject["client"], TContext>;
-	} & Disposable {
+	} & IDisposable {
 		const { counterpart, dispose } = this.getInterface(typedChannel, this.server, this.client, serverImplementation);
 
 		return { client: counterpart as any, dispose };

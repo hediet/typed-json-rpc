@@ -9,8 +9,7 @@
 	},
 	"references": [
 		{ "path": "../json-rpc" },
-		{ "path": "../json-rpc-websocket" },
-		{ "path": "../json-rpc-websocket-server" }
+		{ "path": "../json-rpc-websocket" }
 	],
 	"include": ["./src/**/*"]
 }

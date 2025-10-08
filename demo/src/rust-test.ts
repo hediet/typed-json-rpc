@@ -64,7 +64,7 @@ type T = typeof schema;
 type T2 = SerializerOf<T>;
 type T3 = SerializerOf<ISerializer<string>>;
 
-const x = requestType({});
+const x = requestType({ params: schema, result: schema });
 x
 
 

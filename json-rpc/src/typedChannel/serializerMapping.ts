@@ -1,8 +1,9 @@
 import { ISerializer } from "../schema";
 
+const _x: ISerializer<any> = null!; // keep the import
+
 declare global {
+    // Used to extend JsonRpcSerializerMapperLocal.
     interface JsonRpcSerializerMapper<T> {
-        zod(val: T): T extends ({ parse: any, safeParse: any }) ? ISerializer<ReturnType<T['parse']>> : undefined;
-        serializer(val: T): T extends ISerializer<any> ? T : undefined;
     }
 }

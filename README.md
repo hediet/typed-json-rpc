@@ -6,6 +6,9 @@ A strongly typed remote procedure call library for typescript.
 
 Is compatible with JSON RPC 2.0. However, only object arguments are supported at the moment.
 
+
+Warning: This readme is slightly out of date.
+
 # Install
 
 To install the base library:
@@ -14,17 +17,12 @@ To install the base library:
 yarn add @hediet/json-rpc
 ```
 
-For websocket clients:
+For websocket clients/servers:
 
 ```
 yarn add @hediet/json-rpc-websocket
 ```
 
-For websocket servers:
-
-```
-yarn add @hediet/json-rpc-websocket-server
-```
 
 For webworker communication:
 
@@ -35,12 +33,12 @@ yarn add @hediet/json-rpc-browser
 For process stdio communication:
 
 ```
-yarn add @hediet/json-rpc-streams
+yarn add @hediet/json-rpc-node
 ```
 
 # Features
 
--   Runtime checked types through `io-ts`
+-   Runtime checked types through `zod`
 -   Supports Request/Response and Notification semantics
 -   Supports Error and Success Responses
 -   Provides a lot of abstractions (see Architecture)
@@ -58,7 +56,6 @@ Servers and clients are handled symmetrically.
 
 ```ts
 import {
-	semanticJson as s,
 	contract,
 	requestType,
 	notificationType,

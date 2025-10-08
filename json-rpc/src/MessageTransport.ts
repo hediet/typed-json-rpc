@@ -1,4 +1,4 @@
-import { IValueWithChangeEvent, ValueWithChangeEvent } from "./base";
+import { IValueWithChangeEvent, ValueWithChangeEvent } from "./common";
 import { Message } from "./JsonRpcTypes";
 import { RpcLogger } from "./Logger";
 

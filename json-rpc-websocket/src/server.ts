@@ -1,9 +1,8 @@
 import * as WebSocket from "ws";
-import { WebSocketTransport } from "@hediet/json-rpc-websocket";
-import { EventEmitter, EventSource } from "@hediet/std/events";
-import { Barrier } from "@hediet/std/synchronization";
+import { WebSocketTransport } from "./index";
 import * as http from "http";
 import * as https from "https";
+import { EventEmitter, IEvent, Barrier } from "@hediet/json-rpc";
 
 export interface StartWebSocketServerOptions {
 	/**
@@ -24,7 +23,7 @@ export function startWebSocketServer(
 	options: StartWebSocketServerOptions,
 	handleConnection: (stream: WebSocketTransport) => void
 ): WebSocketServer {
-	let opts: WebSocket.ServerOptions = {};
+	const opts: WebSocket.ServerOptions = {};
 	const l = options.listenOn;
 	if ("port" in l) {
 		opts.port = l.port === "random" ? 0 : l.port;
@@ -54,14 +53,14 @@ export class WebSocketServer {
 			state = "Listening";
 		});
 
-		const errorEventEmitter = new EventEmitter<Error, WebSocketServer>();
-		this.onError = errorEventEmitter.asEvent();
+		const errorEventEmitter = new EventEmitter<Error>();
+		this.onError = errorEventEmitter.event;
 		server.on("error", error => {
 			if (state == "None") {
 				state = "Error";
 				listeningEventEmitter.reject(error);
 			}
-			errorEventEmitter.emit(error, this);
+			errorEventEmitter.fire(error);
 		});
 	}
 
@@ -69,7 +68,7 @@ export class WebSocketServer {
 	 * Is resolved once the socket is listening.
 	 */
 	public readonly onListening: Promise<void>;
-	public readonly onError: EventSource<Error, WebSocketServer>;
+	public readonly onError: IEvent<Error>;
 
 	/**
 	 * Gets the port the websocket server is running on.

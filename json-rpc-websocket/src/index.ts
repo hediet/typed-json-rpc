@@ -1,5 +1,6 @@
 import { Message, BaseMessageTransport, EventEmitter } from "@hediet/json-rpc";
 import WebSocket from "isomorphic-ws";
+export * from "@hediet/json-rpc";
 
 export type NormalizedWebSocketOptions = {
 	address: string;

@@ -22,7 +22,12 @@ export namespace Serializers {
     }
 }
 
-let globalMapper: Partial<JsonRpcSerializerMapper<any>> = {
+interface JsonRpcSerializerMapperLocal<T> extends JsonRpcSerializerMapper<T> {
+    zod(val: T): T extends ({ parse: any, safeParse: any }) ? ISerializer<ReturnType<T['parse']>> : undefined;
+    serializer(val: T): T extends ISerializer<any> ? T : undefined;
+}
+
+let globalMapper: Partial<JsonRpcSerializerMapperLocal<any>> = {
     serializer: val => {
         if (!isSerializer(val)) {
             return undefined;
@@ -56,14 +61,14 @@ function isSerializer(val: any): val is ISerializer<any> {
     return 'serializeToJson' in val && 'deserializeFromJson' in val;
 }
 
-export function setMapper(mapper: Partial<JsonRpcSerializerMapper<any>>): void {
+export function setMapper(mapper: Partial<JsonRpcSerializerMapperLocal<any>>): void {
     Object.assign(globalMapper, mapper);
 }
 
 export type UnionValue<T> = T[keyof T];
 export type RemoveUndefined<T> = T extends undefined ? never : T;
 
-export type SerializerOf<T> = RemoveUndefined<UnionValue<{ [TKey in keyof JsonRpcSerializerMapper<any>]: ReturnType<JsonRpcSerializerMapper<T>[TKey]> }>>;
+export type SerializerOf<T> = RemoveUndefined<UnionValue<{ [TKey in keyof JsonRpcSerializerMapperLocal<any>]: ReturnType<JsonRpcSerializerMapperLocal<T>[TKey]> }>>;
 
 export type SerializerTAny<T> = SerializerOf<T> extends never ? 'Error:UnknownSerializer' : SerializerOf<T> extends ISerializer<infer U> ? U : never;
 

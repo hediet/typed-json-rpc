@@ -27,6 +27,7 @@ if (typeof window !== "undefined") {
 
 	// window:
 	const worker = new Worker(new URL("./demo1-webworker.ts", import.meta.url));
+
 	const { server } = Contract.getServerFromStream(
 		api,
 		connectToWorker(worker),
@@ -57,7 +58,7 @@ if (typeof window !== "undefined") {
 		{
 			calculate: async ({ name }, { counterpart }) => {
 				for (let i = 0; i <= 10; i++) {
-					for (let j = 0; j < 100000000; j++) {}
+					for (let j = 0; j < 100000000; j++) { }
 					if (i === 5 && name === "bar") {
 						throw "`bar` is not supported.";
 					}
