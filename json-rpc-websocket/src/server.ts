@@ -33,7 +33,7 @@ export function startWebSocketServer(
 
 	const wss = new WebSocket.Server(opts);
 	wss.on("connection", ws => {
-		const stream = new WebSocketTransport(ws);
+		const stream = WebSocketTransport.fromWebSocket(ws);
 		handleConnection(stream);
 	});
 

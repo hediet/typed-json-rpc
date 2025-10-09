@@ -51,10 +51,17 @@ export class WebSocketTransport extends BaseMessageTransport {
 		});
 	}
 
+	// We use unknown here, because we don't want to pull in the ws types publically.
+	public static fromWebSocket(socket: unknown): WebSocketTransport {
+		return new WebSocketTransport(socket as WebSocket);
+	}
+
 	private readonly errorEmitter = new EventEmitter<{ error: unknown }>();
 	public readonly onError = this.errorEmitter;
 
-	constructor(private readonly socket: WebSocket) {
+	private constructor(
+		private readonly socket: WebSocket
+	) {
 		super();
 
 		socket.onmessage = (msg) => {
