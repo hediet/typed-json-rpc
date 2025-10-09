@@ -32,6 +32,10 @@ export function normalizeWebSocketOptions(
 	}
 }
 
+export function createTransportToWebSocket(options: WebSocketOptions): Promise<WebSocketTransport> {
+	return WebSocketTransport.connectTo(options);
+}
+
 /**
  * Represents a stream through a web socket.
  * Use the static `connectTo` method to get a stream to a web socket server.
