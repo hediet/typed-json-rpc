@@ -27,8 +27,8 @@ export class WindowLikeTransport extends BaseMessageTransport {
 		if (this._source && source !== this._source) {
 			return;
 		}
-		if (typeof data === "object" && data && "rpcMsg" in data) {
-			this._dispatchReceivedMessage(data.rpcMsg);
+		if (typeof data === "object" && data) {
+			this._dispatchReceivedMessage(data);
 		}
 	};
 
@@ -39,7 +39,7 @@ export class WindowLikeTransport extends BaseMessageTransport {
 		if (this._loadingState && !this._loadingState.loaded) {
 			await this._loadingState.onLoaded;
 		}
-		this._windowLike.postMessage({ rpcMsg: message }, "*");
+		this._windowLike.postMessage(message);
 	}
 
 	public toString(): string {

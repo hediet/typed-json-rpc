@@ -5,7 +5,7 @@ import { WindowLikeTransport } from "./WindowLikeStream";
  * Gets a stream that uses `self.postMessage` to write
  * and `self.addEventListener` to read messages.
  */
-export function connectIFrameToParent(): BaseMessageTransport {
+export function createTransportFromIFrameToParent(): BaseMessageTransport {
 	if (window.self === window.top) {
 		throw new Error(`Call this function from an iframe!`);
 	}
@@ -17,7 +17,7 @@ export function connectIFrameToParent(): BaseMessageTransport {
  * Gets a stream that uses `worker.postMessage` to write
  * and `worker.addEventListener` to read messages.
  */
-export function connectToIFrame(iframe: HTMLIFrameElement): BaseMessageTransport {
+export function createTransportToIFrame(iframe: HTMLIFrameElement): BaseMessageTransport {
 	if (typeof window === "undefined") {
 		throw new Error(`call this function from the main browser thread`);
 	}
